@@ -1,0 +1,1 @@
+export const BRANCH_MAX_APPROVAL_AMOUNT = 20_000_000;

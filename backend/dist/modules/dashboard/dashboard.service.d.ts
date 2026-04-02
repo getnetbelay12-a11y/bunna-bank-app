@@ -1,0 +1,36 @@
+import { Model } from 'mongoose';
+import { AuthenticatedUser } from '../auth/interfaces';
+import { DashboardPeriodQueryDto } from './dto';
+import { ManagerDashboardSummary, PerformanceSummaryItem, StaffRankingItem, VotingSummaryItem } from './interfaces';
+import { LoanDocument } from '../loans/schemas/loan.schema';
+import { SchoolPaymentDocument } from '../payments/schemas/school-payment.schema';
+import { StaffPerformanceDailyDocument } from '../staff-activity/schemas/staff-performance-daily.schema';
+import { StaffPerformanceWeeklyDocument } from '../staff-activity/schemas/staff-performance-weekly.schema';
+import { StaffPerformanceMonthlyDocument } from '../staff-activity/schemas/staff-performance-monthly.schema';
+import { StaffPerformanceYearlyDocument } from '../staff-activity/schemas/staff-performance-yearly.schema';
+import { VoteDocument } from '../voting/schemas/vote.schema';
+import { VoteResponseDocument } from '../voting/schemas/vote-response.schema';
+import { MemberDocument } from '../members/schemas/member.schema';
+export declare class DashboardService {
+    private readonly loanModel;
+    private readonly schoolPaymentModel;
+    private readonly dailyPerformanceModel;
+    private readonly weeklyPerformanceModel;
+    private readonly monthlyPerformanceModel;
+    private readonly yearlyPerformanceModel;
+    private readonly voteModel;
+    private readonly voteResponseModel;
+    private readonly memberModel;
+    constructor(loanModel: Model<LoanDocument>, schoolPaymentModel: Model<SchoolPaymentDocument>, dailyPerformanceModel: Model<StaffPerformanceDailyDocument>, weeklyPerformanceModel: Model<StaffPerformanceWeeklyDocument>, monthlyPerformanceModel: Model<StaffPerformanceMonthlyDocument>, yearlyPerformanceModel: Model<StaffPerformanceYearlyDocument>, voteModel: Model<VoteDocument>, voteResponseModel: Model<VoteResponseDocument>, memberModel: Model<MemberDocument>);
+    getSummary(currentUser: AuthenticatedUser, query: DashboardPeriodQueryDto): Promise<ManagerDashboardSummary>;
+    getBranchPerformance(currentUser: AuthenticatedUser, query: DashboardPeriodQueryDto): Promise<PerformanceSummaryItem[]>;
+    getDistrictPerformance(currentUser: AuthenticatedUser, query: DashboardPeriodQueryDto): Promise<PerformanceSummaryItem[]>;
+    getStaffRanking(currentUser: AuthenticatedUser, query: DashboardPeriodQueryDto): Promise<StaffRankingItem[]>;
+    getVotingSummary(currentUser: AuthenticatedUser): Promise<VotingSummaryItem[]>;
+    private getPerformanceByScope;
+    private buildScope;
+    private buildManagerScope;
+    private resolvePerformanceModel;
+    private resolvePeriodStart;
+    private ensureManagerAccess;
+}

@@ -1,0 +1,45 @@
+import { Model } from 'mongoose';
+import { AuthenticatedUser } from '../auth/interfaces';
+import { AuditService } from '../audit/audit.service';
+import { MemberDocument } from '../members/schemas/member.schema';
+import { NotificationDocument } from '../notifications/schemas/notification.schema';
+import { CreateVoteOptionDto, CreateVoteDto, RespondToVoteDto } from './dto';
+import { VoteAdminListItem, VoteDetailResult, VoteOptionResult, VoteParticipationResult, VoteResultsBreakdown, VoteSummaryResult } from './interfaces';
+import { VoteOtpVerificationPort } from './vote-otp.port';
+import { VoteAuditLogDocument } from './schemas/vote-audit-log.schema';
+import { VoteOptionDocument } from './schemas/vote-option.schema';
+import { VoteResponseDocument } from './schemas/vote-response.schema';
+import { VoteDocument } from './schemas/vote.schema';
+export declare class VotingService {
+    private readonly voteModel;
+    private readonly voteOptionModel;
+    private readonly voteResponseModel;
+    private readonly voteAuditLogModel;
+    private readonly memberModel;
+    private readonly notificationModel;
+    private readonly voteOtpPort;
+    private readonly auditService;
+    constructor(voteModel: Model<VoteDocument>, voteOptionModel: Model<VoteOptionDocument>, voteResponseModel: Model<VoteResponseDocument>, voteAuditLogModel: Model<VoteAuditLogDocument>, memberModel: Model<MemberDocument>, notificationModel: Model<NotificationDocument>, voteOtpPort: VoteOtpVerificationPort, auditService: AuditService);
+    getActiveVotes(): Promise<VoteSummaryResult[]>;
+    getVote(voteId: string): Promise<VoteDetailResult>;
+    respondToVote(currentUser: AuthenticatedUser, voteId: string, dto: RespondToVoteDto): Promise<{
+        responseId: string;
+        voteId: string;
+        optionId: string;
+        otpVerifiedAt: Date;
+    }>;
+    getVoteResults(voteId: string): Promise<VoteResultsBreakdown[]>;
+    listVotesForAdmin(currentUser: AuthenticatedUser): Promise<VoteAdminListItem[]>;
+    createVote(currentUser: AuthenticatedUser, dto: CreateVoteDto): Promise<VoteSummaryResult>;
+    addVoteOption(currentUser: AuthenticatedUser, voteId: string, dto: CreateVoteOptionDto): Promise<VoteOptionResult>;
+    openVote(currentUser: AuthenticatedUser, voteId: string): Promise<VoteSummaryResult>;
+    closeVote(currentUser: AuthenticatedUser, voteId: string): Promise<VoteSummaryResult>;
+    getParticipation(currentUser: AuthenticatedUser, voteId: string): Promise<VoteParticipationResult>;
+    private updateVoteStatus;
+    private ensureMemberAccess;
+    private ensureAdminAccess;
+    private ensureShareholder;
+    private ensureVoteIsOpen;
+    private toVoteSummary;
+    private toVoteOption;
+}

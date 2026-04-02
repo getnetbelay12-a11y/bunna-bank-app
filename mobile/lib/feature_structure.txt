@@ -1,0 +1,19 @@
+main.dart
+src/
+  app/
+  core/
+    models/
+    services/
+  features/
+    auth/
+    home/
+    loans/
+    navigation/
+    notifications/
+    profile/
+    savings/
+    school_payments/
+    settings/
+    voting/
+  shared/
+    widgets/

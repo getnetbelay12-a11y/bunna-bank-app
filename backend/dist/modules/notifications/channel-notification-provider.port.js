@@ -1,0 +1,8 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.IN_APP_NOTIFICATION_PROVIDER = exports.TELEGRAM_NOTIFICATION_PROVIDER = exports.SMS_NOTIFICATION_PROVIDER = exports.EMAIL_NOTIFICATION_PROVIDER = void 0;
+exports.EMAIL_NOTIFICATION_PROVIDER = Symbol('EMAIL_NOTIFICATION_PROVIDER');
+exports.SMS_NOTIFICATION_PROVIDER = Symbol('SMS_NOTIFICATION_PROVIDER');
+exports.TELEGRAM_NOTIFICATION_PROVIDER = Symbol('TELEGRAM_NOTIFICATION_PROVIDER');
+exports.IN_APP_NOTIFICATION_PROVIDER = Symbol('IN_APP_NOTIFICATION_PROVIDER');
+//# sourceMappingURL=channel-notification-provider.port.js.map

@@ -1,0 +1,97 @@
+import { ConfigService } from '@nestjs/config';
+import { Model } from 'mongoose';
+import { AuthenticatedUser } from '../auth/interfaces';
+import { MemberProfilesService } from '../member-profiles/member-profiles.service';
+import { FaydaVerificationProvider } from './interfaces/fayda-verification-provider.interface';
+import { SubmitFaydaFinDto, UploadFaydaQrDto } from './dto';
+import { IdentityVerificationDocument } from './schemas/identity-verification.schema';
+export declare const FAYDA_VERIFICATION_PROVIDER = "FAYDA_VERIFICATION_PROVIDER";
+export declare class IdentityVerificationService {
+    private readonly identityVerificationModel;
+    private readonly memberProfilesService;
+    private readonly configService;
+    private readonly provider;
+    constructor(identityVerificationModel: Model<IdentityVerificationDocument>, memberProfilesService: MemberProfilesService, configService: ConfigService, provider: FaydaVerificationProvider);
+    start(currentUser: AuthenticatedUser, consentAccepted: boolean): Promise<{
+        id: any;
+        memberId: string;
+        phoneNumber: string;
+        faydaFin: string | undefined;
+        faydaAlias: string | undefined;
+        qrDataRaw: string | undefined;
+        verificationMethod: string;
+        verificationStatus: string;
+        verifiedAt: Date | undefined;
+        verificationReference: string | undefined;
+        failureReason: string | undefined;
+        createdAt: Date | undefined;
+        updatedAt: Date | undefined;
+    }>;
+    submitFin(currentUser: AuthenticatedUser, dto: SubmitFaydaFinDto): Promise<{
+        id: any;
+        memberId: string;
+        phoneNumber: string;
+        faydaFin: string | undefined;
+        faydaAlias: string | undefined;
+        qrDataRaw: string | undefined;
+        verificationMethod: string;
+        verificationStatus: string;
+        verifiedAt: Date | undefined;
+        verificationReference: string | undefined;
+        failureReason: string | undefined;
+        createdAt: Date | undefined;
+        updatedAt: Date | undefined;
+    }>;
+    uploadQr(currentUser: AuthenticatedUser, dto: UploadFaydaQrDto): Promise<{
+        id: any;
+        memberId: string;
+        phoneNumber: string;
+        faydaFin: string | undefined;
+        faydaAlias: string | undefined;
+        qrDataRaw: string | undefined;
+        verificationMethod: string;
+        verificationStatus: string;
+        verifiedAt: Date | undefined;
+        verificationReference: string | undefined;
+        failureReason: string | undefined;
+        createdAt: Date | undefined;
+        updatedAt: Date | undefined;
+    }>;
+    verify(currentUser: AuthenticatedUser): Promise<{
+        id: any;
+        memberId: string;
+        phoneNumber: string;
+        faydaFin: string | undefined;
+        faydaAlias: string | undefined;
+        qrDataRaw: string | undefined;
+        verificationMethod: string;
+        verificationStatus: string;
+        verifiedAt: Date | undefined;
+        verificationReference: string | undefined;
+        failureReason: string | undefined;
+        createdAt: Date | undefined;
+        updatedAt: Date | undefined;
+    }>;
+    getStatus(currentUser: AuthenticatedUser): Promise<{
+        id: any;
+        memberId: string;
+        phoneNumber: string;
+        faydaFin: string | undefined;
+        faydaAlias: string | undefined;
+        qrDataRaw: string | undefined;
+        verificationMethod: string;
+        verificationStatus: string;
+        verifiedAt: Date | undefined;
+        verificationReference: string | undefined;
+        failureReason: string | undefined;
+        createdAt: Date | undefined;
+        updatedAt: Date | undefined;
+    } | {
+        memberId: string;
+        phoneNumber: string;
+        verificationStatus: string;
+        verificationMethod: string;
+    }>;
+    private resolveIntegrationMode;
+    private toResult;
+}

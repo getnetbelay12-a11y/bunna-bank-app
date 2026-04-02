@@ -1,0 +1,17 @@
+main.tsx
+app/
+core/
+  api/
+features/
+  audit/
+  branch-analytics/
+  dashboard/
+  district-analytics/
+  layout/
+  loan-monitoring/
+  login/
+  notifications/
+  staff-performance/
+  voting/
+shared/
+  components/
