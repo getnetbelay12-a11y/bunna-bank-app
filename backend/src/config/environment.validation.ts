@@ -192,7 +192,7 @@ export function validateEnvironment(config: EnvironmentRecord): EnvironmentRecor
       readString(config, 'SMS_PROVIDER', 'log'),
       VALID_NOTIFICATION_PROVIDERS,
     ),
-    SMS_SENDER_ID: readString(config, 'SMS_SENDER_ID', 'AMHARA_BANK'),
+    SMS_SENDER_ID: readString(config, 'SMS_SENDER_ID', 'BUNNA_BANK'),
     SMS_GENERIC_ENDPOINT: readString(config, 'SMS_GENERIC_ENDPOINT'),
     SMS_GENERIC_API_KEY: readString(config, 'SMS_GENERIC_API_KEY'),
     EMAIL_ENABLED: readBoolean(config, 'EMAIL_ENABLED', true),
