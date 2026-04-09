@@ -1,6 +1,6 @@
 {
-    "name": "CBE Bank App",
-    "short_name": "CBE Bank",
+    "name": "Bunna Bank App",
+    "short_name": "Bunna Bank",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

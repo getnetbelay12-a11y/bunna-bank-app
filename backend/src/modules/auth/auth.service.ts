@@ -16,15 +16,24 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import { MemberType, NotificationType, UserRole } from '../../common/enums';
+import {
+  MemberType,
+  NotificationCategory,
+  NotificationChannel,
+  NotificationType,
+  UserRole,
+} from '../../common/enums';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser, AuthPrincipal } from './interfaces';
 import {
   CheckExistingAccountDto,
+  LookupOnboardingStatusDto,
   MemberLoginDto,
   RefreshTokenDto,
+  RecoveryOptionsDto,
   RegisterMemberDto,
   RequestOtpDto,
+  ResetPinDto,
   StartLoginDto,
   StaffLoginDto,
   VerifyPinLoginDto,
@@ -48,6 +57,10 @@ import { Member, MemberDocument } from '../members/schemas/member.schema';
 import { MemberProfilesService } from '../member-profiles/member-profiles.service';
 import { IdentityVerificationService } from '../identity-verification/identity-verification.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailNotificationProvider } from '../notifications/providers/email-notification.provider';
+import { SmsNotificationProvider } from '../notifications/providers/sms-notification.provider';
+import { buildRegistrationCompletedNotification } from '../notifications/banking-notification-builders';
+import { deriveStaffPermissions } from '../staff/staff-permissions';
 import { AuthSession, AuthSessionDocument } from './schemas/auth-session.schema';
 import { Device, DeviceDocument } from './schemas/device.schema';
 
@@ -75,6 +88,8 @@ export class AuthService implements OnModuleInit {
     private readonly memberProfilesService: MemberProfilesService,
     private readonly identityVerificationService: IdentityVerificationService,
     private readonly notificationsService: NotificationsService,
+    private readonly emailNotificationProvider: EmailNotificationProvider,
+    private readonly smsNotificationProvider: SmsNotificationProvider,
     private readonly auditService: AuditService,
   ) {}
 
@@ -89,15 +104,16 @@ export class AuthService implements OnModuleInit {
   async checkExistingAccount(
     dto: CheckExistingAccountDto,
   ): Promise<CheckExistingAccountResult> {
+    const phoneNumber = this.resolvePhoneNumber(dto);
     const checks: Array<{
       filter: Record<string, unknown>;
       matchType: CheckExistingAccountResult['matchType'];
       message: string;
     }> = [];
 
-    if (dto.phoneNumber) {
+    if (phoneNumber) {
       checks.push({
-        filter: { phone: dto.phoneNumber },
+        filter: { phone: phoneNumber },
         matchType: 'phone',
         message: 'An account already exists for this phone number.',
       });
@@ -126,6 +142,9 @@ export class AuthService implements OnModuleInit {
           exists: true,
           matchType: check.matchType,
           message: check.message,
+          customerId:
+            (existing as { customerId?: string; memberNumber?: string }).customerId ??
+            (existing as { customerId?: string; memberNumber?: string }).memberNumber,
         };
       }
     }
@@ -133,6 +152,51 @@ export class AuthService implements OnModuleInit {
     return {
       exists: false,
       message: 'No existing account was found. You can continue onboarding.',
+    };
+  }
+
+  async getOnboardingStatus(dto: LookupOnboardingStatusDto) {
+    const normalizedPhone = this.resolveRequiredPhoneNumber({
+      phoneNumber: dto.phoneNumber,
+    });
+    const member = await this.memberModel.findOne({
+      customerId: dto.customerId.trim(),
+      phone: normalizedPhone,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'Onboarding status was not found for the provided details.',
+      );
+    }
+
+    const profile = await this.memberProfilesService.findByMemberId(
+      member._id.toString(),
+    );
+    const onboardingReviewStatus = profile?.onboardingReviewStatus ?? 'submitted';
+    const identityVerificationStatus =
+      profile?.identityVerificationStatus ?? 'not_started';
+
+    return {
+      customerId: member.customerId,
+      phoneNumber: member.phone,
+      branchName: member.preferredBranchName,
+      onboardingReviewStatus,
+      membershipStatus: profile?.membershipStatus ?? 'pending_verification',
+      identityVerificationStatus,
+      reviewNote: profile?.onboardingReviewNote,
+      requiredAction: this.resolveOnboardingRequiredAction(
+        onboardingReviewStatus,
+        identityVerificationStatus,
+      ),
+      statusMessage: this.resolveOnboardingStatusMessage(
+        onboardingReviewStatus,
+        profile?.onboardingReviewNote,
+      ),
+      lastUpdatedAt:
+        profile?.onboardingLastReviewedAt?.toISOString() ??
+        profile?.updatedAt?.toISOString() ??
+        (member as { updatedAt?: Date }).updatedAt?.toISOString(),
     };
   }
 
@@ -234,6 +298,7 @@ export class AuthService implements OnModuleInit {
               : normalizedDto.faydaFin
                 ? 'fin_submitted'
                 : 'not_started',
+          onboardingReviewStatus: demoMode ? 'approved' : 'submitted',
         });
       },
     );
@@ -293,15 +358,19 @@ export class AuthService implements OnModuleInit {
       'registration notification',
       normalizedDto.phoneNumber,
       async () => {
+        const notification = buildRegistrationCompletedNotification(demoMode);
         await this.notificationsService.createNotification({
           userType: 'member',
           userId: member._id.toString(),
           userRole: UserRole.MEMBER,
-          type: NotificationType.SYSTEM,
-          title: 'Registration Completed',
-          message: demoMode
-            ? 'Your demo account has been created. Verification is bypassed in demo mode.'
-            : 'Your account has been created. Fayda verification is pending and the submission may require manual review.',
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          entityType: 'kyc',
+          entityId: member._id.toString(),
+          actionLabel: 'Review KYC',
+          priority: demoMode ? 'low' : 'normal',
+          deepLink: '/fayda-verification',
         });
       },
     );
@@ -311,7 +380,7 @@ export class AuthService implements OnModuleInit {
       'registration audit log',
       normalizedDto.phoneNumber,
       async () => {
-        await this.auditService.log({
+        await this.auditService.logActorAction({
           actorId: member._id.toString(),
           actorRole: UserRole.MEMBER,
           actionType: 'member_registration_completed',
@@ -336,7 +405,7 @@ export class AuthService implements OnModuleInit {
       customerId: identifiers.customerId,
       memberId: identifiers.memberId,
       message: demoMode
-        ? 'Demo registration completed successfully. Verification checks were bypassed.'
+        ? 'Seeded registration completed successfully. Verification checks were bypassed.'
         : 'Registration submitted successfully. Fayda verification is pending review.',
     };
   }
@@ -350,7 +419,8 @@ export class AuthService implements OnModuleInit {
   }
 
   async startLogin(dto: StartLoginDto): Promise<StartLoginResult> {
-    const identifier = dto.phoneNumber?.trim() ?? dto.customerId?.trim();
+    const identifier =
+      this.resolvePhoneNumber(dto) ?? dto.customerId?.trim();
     if (identifier == null || identifier.length === 0) {
       throw new BadRequestException('Phone number or customer ID is required.');
     }
@@ -469,7 +539,6 @@ export class AuthService implements OnModuleInit {
   }
 
   async loginStaff(dto: StaffLoginDto): Promise<LoginResult> {
-    this.logStaffLoginAttempt(dto.identifier);
     const principal = await this.staffAuthRepository.findByIdentifier(
       dto.identifier,
     );
@@ -540,6 +609,8 @@ export class AuthService implements OnModuleInit {
         profile?.identityVerificationStatus ?? 'not_started',
       featureFlags: {
         voting: principal.memberType === MemberType.SHAREHOLDER,
+        announcements: principal.memberType === MemberType.SHAREHOLDER,
+        dividends: principal.memberType === MemberType.SHAREHOLDER,
         schoolPayment: true,
         loans: true,
         savings: true,
@@ -549,19 +620,179 @@ export class AuthService implements OnModuleInit {
   }
 
   async requestOtp(dto: RequestOtpDto) {
+    const phoneNumber = this.resolveRequiredPhoneNumber(dto);
+    const email = dto.email?.trim().toLowerCase();
+    const purpose = dto.purpose?.trim() || 'general';
+    let recoveryMember: Pick<MemberDocument, '_id' | 'phone' | 'email'> | null =
+      null;
+
+    if (purpose === 'pin_recovery') {
+      recoveryMember = await this.memberModel
+        .findOne({ phone: phoneNumber })
+        .select('_id phone email');
+      if (!recoveryMember) {
+        throw new NotFoundException('No account was found for this phone number.');
+      }
+    }
+
+    const storedRecoveryEmail = recoveryMember?.email?.trim().toLowerCase();
+    const channel =
+      dto.preferredOtpChannel === 'email' && (email || storedRecoveryEmail)
+        ? NotificationChannel.EMAIL
+        : NotificationChannel.SMS;
+
+    if (purpose === 'pin_recovery') {
+      if (
+        channel === NotificationChannel.EMAIL &&
+        !storedRecoveryEmail
+      ) {
+        throw new BadRequestException(
+          'No email address is available for PIN recovery on this member profile.',
+        );
+      }
+    }
+
+    const otpCode = this.generateOtpCode();
+    const destination =
+      channel === NotificationChannel.EMAIL
+        ? storedRecoveryEmail ?? email ?? phoneNumber
+        : phoneNumber;
+
+    if (channel === NotificationChannel.EMAIL && !email) {
+      if (!storedRecoveryEmail) {
+        throw new BadRequestException(
+          'Email address is required when email OTP delivery is selected.',
+        );
+      }
+    }
+
+    const deliveryResult =
+      channel === NotificationChannel.EMAIL
+        ? await this.emailNotificationProvider.send({
+            channel,
+            recipient: destination,
+            memberId: 'otp-pre-registration',
+            category: NotificationCategory.LOAN,
+            subject: 'Bunna Bank OTP Verification Code',
+            messageBody: `Your Bunna Bank verification code is ${otpCode}. It expires soon.`,
+            htmlBody: `<p>Your Bunna Bank verification code is <strong>${otpCode}</strong>.</p><p>It expires soon.</p>`,
+          })
+        : await this.smsNotificationProvider.send({
+            channel,
+            recipient: destination,
+            memberId: 'otp-pre-registration',
+            category: NotificationCategory.LOAN,
+            messageBody: `Bunna Bank OTP: ${otpCode}. It expires soon.`,
+          });
+
+    this.logger.log(
+      `requestOtp phone=${phoneNumber} channel=${channel} destination=${destination} status=${deliveryResult.status}`,
+    );
+
     return {
-      phoneNumber: dto.phoneNumber,
-      deliveryChannel: 'sms',
+      phoneNumber,
+      email: storedRecoveryEmail ?? email,
+      purpose,
+      deliveryChannel: channel,
+      maskedDestination:
+        channel === NotificationChannel.EMAIL
+          ? this.maskEmail(destination)
+          : this.maskPhoneNumber(destination),
       status: 'otp_requested',
       reference: `OTP-${Date.now()}`,
+      providerStatus: deliveryResult.status,
+    };
+  }
+
+  async getRecoveryOptions(dto: RecoveryOptionsDto) {
+    const identifier = dto.identifier?.trim();
+    const phoneNumber = this.resolvePhoneNumber(dto);
+    const normalizedEmail = dto.email?.trim().toLowerCase();
+    const member = await this.memberModel
+      .findOne({
+        $or: [
+          ...(phoneNumber != null ? [{ phone: phoneNumber }] : []),
+          ...(normalizedEmail != null ? [{ email: normalizedEmail }] : []),
+          ...(identifier != null
+            ? [
+                { phone: identifier },
+                { email: identifier.toLowerCase() },
+              ]
+            : []),
+        ],
+      })
+      .select('_id phone email');
+
+    if (!member) {
+      throw new NotFoundException(
+        'No account was found for the provided phone number or email address.',
+      );
+    }
+
+    const channels = [
+      {
+        channel: 'sms',
+        maskedDestination: this.maskPhoneNumber(member.phone),
+      },
+    ];
+
+    if (member.email?.trim()) {
+      channels.push({
+        channel: 'email',
+        maskedDestination: this.maskEmail(member.email.trim().toLowerCase()),
+      });
+    }
+
+    return {
+      phoneNumber: member.phone,
+      channels,
     };
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
+    const phoneNumber = this.resolveRequiredPhoneNumber(dto);
+
     return {
-      phoneNumber: dto.phoneNumber,
+      phoneNumber,
       verified: dto.otpCode.length >= 4,
       status: dto.otpCode.length >= 4 ? 'verified' : 'failed',
+    };
+  }
+
+  async resetPin(dto: ResetPinDto) {
+    const phoneNumber = this.resolveRequiredPhoneNumber(dto);
+    const email = dto.email?.trim().toLowerCase();
+
+    if (dto.newPin !== dto.confirmPin) {
+      throw new BadRequestException('PIN confirmation does not match.');
+    }
+
+    if (!/^\d{4,6}$/.test(dto.newPin)) {
+      throw new BadRequestException('PIN must be 4 to 6 digits.');
+    }
+
+    const member = await this.memberModel.findOne({ phone: phoneNumber });
+    if (!member) {
+      throw new NotFoundException('No account was found for this phone number.');
+    }
+
+    if (email && member.email && member.email.toLowerCase() !== email) {
+      throw new BadRequestException(
+        'The email address does not match the member profile.',
+      );
+    }
+
+    member.pinHash = this.hashSecret(dto.newPin);
+    await member.save();
+
+    this.logger.log(
+      `resetPin member=${member._id.toString()} phone=${phoneNumber} via=${email ? 'phone_email' : 'phone'}`,
+    );
+
+    return {
+      status: 'pin_reset',
+      phoneNumber,
+      message: 'PIN updated successfully.',
     };
   }
 
@@ -589,11 +820,17 @@ export class AuthService implements OnModuleInit {
     return this.buildTokens({
       id: currentUser.sub,
       role: currentUser.role,
+      identifier: currentUser.identifier,
+      email: currentUser.email,
       memberType: currentUser.memberType,
+      fullName: currentUser.fullName,
       passwordHash: 'validated-refresh-token',
       phone: currentUser.phone,
       branchId: currentUser.branchId,
+      branchName: currentUser.branchName,
       districtId: currentUser.districtId,
+      districtName: currentUser.districtName,
+      permissions: currentUser.permissions,
     });
   }
 
@@ -614,14 +851,6 @@ export class AuthService implements OnModuleInit {
     options: { bypassPasswordCheck?: boolean } = {},
   ): Promise<LoginResult> {
     if (!principal) {
-      this.logStaffAuthDecision({
-        identifier: undefined,
-        email: undefined,
-        role: undefined,
-        found: false,
-        passwordAccepted: false,
-        decision: 'rejected_user_not_found',
-      });
       throw new UnauthorizedException('Invalid credentials.');
     }
 
@@ -631,15 +860,6 @@ export class AuthService implements OnModuleInit {
           plainPassword,
           principal.passwordHash,
         );
-
-    this.logStaffAuthDecision({
-      identifier: principal.identifier,
-      email: principal.email,
-      role: principal.role,
-      found: true,
-      passwordAccepted: passwordIsValid,
-      decision: passwordIsValid ? 'password_accepted' : 'rejected_bad_password',
-    });
 
     if (!passwordIsValid) {
       throw new UnauthorizedException('Invalid credentials.');
@@ -656,25 +876,46 @@ export class AuthService implements OnModuleInit {
     }
 
     const tokens = await this.buildTokens(principal);
-    this.logTokenCreation(principal);
     const profile = requireMemberRole
       ? await this.memberProfilesService.findByMemberId(principal.id)
       : null;
+
+    if (requireMemberRole) {
+      await this.notificationsService.createNotification({
+        userType: 'member',
+        userId: principal.id,
+        userRole: principal.role,
+        type: NotificationType.LOGIN_DETECTED,
+        title: 'Login Detected',
+        message: 'A new login to your Bunna Bank mobile profile was detected.',
+        entityType: 'security',
+        actionLabel: 'Review activity',
+        priority: 'normal',
+        deepLink: '/profile/security',
+      });
+    }
 
     return {
       ...tokens,
       user: {
         id: principal.id,
         role: principal.role,
+        identifier: principal.identifier,
+        email: principal.email,
         customerId: principal.customerId ?? principal.memberNumber,
         memberType: principal.memberType,
         fullName: principal.fullName,
         memberNumber: principal.memberNumber,
         staffNumber: principal.staffNumber,
+        schoolId: principal.schoolId,
+        schoolName: principal.schoolName,
         branchId: principal.branchId,
         districtId: principal.districtId,
-        branchName: this.resolveStaffScopeName(principal),
+        branchName: principal.branchName,
         districtName: principal.districtName,
+        permissions:
+          principal.permissions ??
+          (principal.staffNumber ? deriveStaffPermissions(principal.role) : undefined),
         phone: principal.phone,
         membershipStatus: profile?.membershipStatus,
         identityVerificationStatus: profile?.identityVerificationStatus,
@@ -693,6 +934,8 @@ export class AuthService implements OnModuleInit {
 
     return {
       voting: principal.memberType === MemberType.SHAREHOLDER,
+      announcements: principal.memberType === MemberType.SHAREHOLDER,
+      dividends: principal.memberType === MemberType.SHAREHOLDER,
       schoolPayment: true,
       loans: true,
       savings: true,
@@ -711,7 +954,11 @@ export class AuthService implements OnModuleInit {
     const payload: AuthenticatedUser = {
       sub: principal.id,
       role: principal.role,
+      customerId: principal.customerId,
+      identifier: principal.identifier,
+      email: principal.email,
       memberType: principal.memberType,
+      fullName: principal.fullName,
       phone: principal.phone,
       memberId:
         principal.role === UserRole.MEMBER ||
@@ -723,8 +970,15 @@ export class AuthService implements OnModuleInit {
         principal.role === UserRole.SHAREHOLDER_MEMBER
           ? undefined
           : principal.id,
+      schoolId: principal.schoolId,
+      schoolName: principal.schoolName,
       branchId: principal.branchId,
+      branchName: principal.branchName,
       districtId: principal.districtId,
+      districtName: principal.districtName,
+      permissions:
+        principal.permissions ??
+        (principal.staffNumber ? deriveStaffPermissions(principal.role) : undefined),
     };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -753,65 +1007,12 @@ export class AuthService implements OnModuleInit {
     );
   }
 
-  private resolveStaffScopeName(principal: AuthPrincipal) {
-    if (
-      principal.role === UserRole.ADMIN ||
-      principal.role === UserRole.HEAD_OFFICE_MANAGER ||
-      principal.role === UserRole.HEAD_OFFICE_OFFICER
-    ) {
-      return principal.branchName ?? 'Head Office';
-    }
-
-    return principal.branchName ?? principal.districtName;
-  }
-
-  private logStaffLoginAttempt(identifier: string) {
-    if (!this.isDevelopmentAuthLoggingEnabled()) {
-      return;
-    }
-
-    this.logger.debug(
-      `Staff login payload received identifier=${identifier.trim()}`,
-    );
-  }
-
-  private logStaffAuthDecision(details: {
-    identifier?: string;
-    email?: string;
-    role?: UserRole;
-    found: boolean;
-    passwordAccepted: boolean;
-    decision: string;
-  }) {
-    if (!this.isDevelopmentAuthLoggingEnabled()) {
-      return;
-    }
-
-    this.logger.debug(
-      `Staff auth decision found=${details.found} identifier=${details.identifier ?? 'n/a'} email=${details.email ?? 'n/a'} role=${details.role ?? 'n/a'} passwordAccepted=${details.passwordAccepted} decision=${details.decision}`,
-    );
-  }
-
-  private logTokenCreation(principal: AuthPrincipal) {
-    if (!this.isDevelopmentAuthLoggingEnabled()) {
-      return;
-    }
-
-    this.logger.debug(
-      `JWT/session created for principal=${principal.id} role=${principal.role}`,
-    );
-  }
-
-  private isDevelopmentAuthLoggingEnabled() {
-    return this.configService.get?.<string>('NODE_ENV') !== 'production';
-  }
-
   private async generateStandardIdentifiers() {
     const totalMembers = await this.memberModel.countDocuments();
     const sequence = String(totalMembers + 1).padStart(6, '0');
     return {
-      customerId: `CBE-${sequence}`,
-      memberId: `CBE-${sequence}`,
+      customerId: `BUN-${sequence}`,
+      memberId: `BUN-${sequence}`,
     };
   }
 
@@ -904,6 +1105,16 @@ export class AuthService implements OnModuleInit {
   }
 
   private validateRegistrationInput(dto: RegisterMemberDto, demoMode: boolean) {
+    if (!dto.faydaFin && !dto.faydaQrData) {
+      throw new BadRequestException(
+        'Fayda FIN or Fayda QR data is required for secure onboarding.',
+      );
+    }
+
+    if (dto.faydaFin && !/^\d{12}$/.test(dto.faydaFin)) {
+      throw new BadRequestException('Fayda FIN must be exactly 12 digits.');
+    }
+
     if (!demoMode) {
       if (!dto.dateOfBirth || Number.isNaN(new Date(dto.dateOfBirth).getTime())) {
         throw new BadRequestException('Date of birth is required.');
@@ -944,7 +1155,7 @@ export class AuthService implements OnModuleInit {
     city: string;
     consentAccepted: boolean;
   } {
-    const phoneNumber = dto.phoneNumber.trim();
+    const phoneNumber = this.resolveRequiredPhoneNumber(dto);
     const fallbackPassword =
       dto.password?.trim() || phoneNumber.slice(-4) || '1234';
 
@@ -953,6 +1164,7 @@ export class AuthService implements OnModuleInit {
       firstName: dto.firstName.trim(),
       lastName: dto.lastName.trim(),
       phoneNumber,
+      phone: phoneNumber,
       email: dto.email?.trim() || undefined,
       dateOfBirth:
         (dto.dateOfBirth?.trim().length ?? 0) > 0
@@ -1005,7 +1217,7 @@ export class AuthService implements OnModuleInit {
     if (!district) {
       district = await this.districtModel.create({
         code: 'demo_district',
-        name: 'Demo District',
+        name: 'Addis Central District',
         isActive: true,
       });
     }
@@ -1020,7 +1232,7 @@ export class AuthService implements OnModuleInit {
 
     return this.branchModel.create({
       code: 'demo_branch',
-      name: 'Demo Branch',
+      name: 'Addis Central Branch',
       districtId: district._id,
       city: 'Addis Ababa',
       region: 'Addis Ababa',
@@ -1032,44 +1244,43 @@ export class AuthService implements OnModuleInit {
     const demoPhone = '0911000001';
     const branch = await this.resolveOrCreateDemoBranch();
     if (!branch) {
-      this.logger.warn('Unable to ensure demo member account because no branch is available.');
+      this.logger.warn('Unable to ensure seeded member account because no branch is available.');
       return;
     }
 
-    const demoMember = await this.memberModel.findOneAndUpdate(
-      {
-        $or: [
-          { phone: demoPhone },
-          { customerId: 'CUST-1001' },
-          { memberNumber: 'MBR-1001' },
-        ],
-      },
-      {
-        $set: {
-          customerId: 'CUST-1001',
-          memberNumber: 'MBR-1001',
-          memberType: MemberType.MEMBER,
-          role: UserRole.MEMBER,
-          fullName: 'Demo User',
-          firstName: 'Demo',
-          lastName: 'User',
-          phone: demoPhone,
-          preferredBranchName: branch.name,
-          branchId: branch._id,
-          districtId: branch.districtId,
-          shareBalance: 0,
-          passwordHash: this.hashSecret('1234'),
-          pinHash: this.hashSecret('1234'),
-          kycStatus: 'demo_approved',
-          isActive: true,
-        },
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      },
-    );
+    const existingDemoMember = await this.memberModel.findOne({
+      $or: [
+        { phone: demoPhone },
+        { customerId: 'BUN-100001' },
+        { memberNumber: 'BUN-100001' },
+      ],
+    });
+
+    if (existingDemoMember) {
+      this.logger.log(
+        `Demo bootstrap found existing seeded member customerId=${existingDemoMember.customerId} phone=${existingDemoMember.phone}; skipping destructive overwrite.`,
+      );
+      return;
+    }
+
+    const demoMember = await this.memberModel.create({
+      customerId: 'BUN-100001',
+      memberNumber: 'BUN-100001',
+      memberType: MemberType.MEMBER,
+      role: UserRole.MEMBER,
+      fullName: 'Selamawit Molla',
+      firstName: 'Selamawit',
+      lastName: 'Molla',
+      phone: demoPhone,
+      preferredBranchName: branch.name,
+      branchId: branch._id,
+      districtId: branch.districtId,
+      shareBalance: 0,
+      passwordHash: this.hashSecret('demo-pass'),
+      pinHash: this.hashSecret('1234'),
+      kycStatus: 'demo_approved',
+      isActive: true,
+    });
 
     await this.memberProfilesService.updateStatuses(demoMember._id.toString(), {
       membershipStatus: 'active_demo',
@@ -1092,7 +1303,7 @@ export class AuthService implements OnModuleInit {
     });
 
     this.logger.log(
-      `Ensured demo member account customerId=CUST-1001 memberNumber=MBR-1001 phone=${demoPhone}`,
+      `Ensured seeded member account customerId=BUN-100001 memberNumber=BUN-100001 phone=${demoPhone}`,
     );
   }
 
@@ -1115,6 +1326,104 @@ export class AuthService implements OnModuleInit {
         throw error;
       }
     }
+  }
+
+  private resolvePhoneNumber(dto: { phoneNumber?: string; phone?: string }) {
+    const rawPhone = dto.phoneNumber?.trim() || dto.phone?.trim();
+    if (!rawPhone) {
+      return undefined;
+    }
+
+    return this.normalizePhoneNumber(rawPhone);
+  }
+
+  private resolveRequiredPhoneNumber(dto: { phoneNumber?: string; phone?: string }) {
+    const phoneNumber = this.resolvePhoneNumber(dto);
+    if (!phoneNumber) {
+      throw new BadRequestException('Phone number is required.');
+    }
+
+    return phoneNumber;
+  }
+
+  private resolveOnboardingRequiredAction(
+    onboardingReviewStatus: string,
+    identityVerificationStatus: string,
+  ) {
+    if (onboardingReviewStatus === 'approved') {
+      return 'You can now continue with verified-member services and login.';
+    }
+    if (onboardingReviewStatus === 'needs_action') {
+      return 'Review the correction request and resubmit the missing or unclear onboarding evidence.';
+    }
+    if (identityVerificationStatus === 'qr_uploaded') {
+      return 'Bank staff are validating your Fayda QR evidence and selfie submission.';
+    }
+    if (identityVerificationStatus === 'fin_submitted') {
+      return 'Bank staff are validating your Fayda FIN record and selfie submission.';
+    }
+    return 'Your onboarding package is waiting for branch and KYC review.';
+  }
+
+  private resolveOnboardingStatusMessage(
+    onboardingReviewStatus: string,
+    onboardingReviewNote?: string,
+  ) {
+    if (onboardingReviewNote && onboardingReviewNote.trim().length > 0) {
+      return onboardingReviewNote.trim();
+    }
+
+    switch (onboardingReviewStatus) {
+      case 'approved':
+        return 'Your onboarding package has been approved.';
+      case 'review_in_progress':
+        return 'Your onboarding package is currently under active staff review.';
+      case 'needs_action':
+        return 'Your onboarding package needs an update before approval can continue.';
+      case 'submitted':
+      default:
+        return 'Your onboarding package has been submitted and is waiting for review.';
+    }
+  }
+
+  private generateOtpCode() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
+  private maskPhoneNumber(phoneNumber: string) {
+    if (phoneNumber.length <= 4) {
+      return phoneNumber;
+    }
+
+    return `${phoneNumber.substring(0, 2)}${'*'.repeat(
+      phoneNumber.length - 4,
+    )}${phoneNumber.substring(phoneNumber.length - 2)}`;
+  }
+
+  private maskEmail(email: string) {
+    const [localPart, domain = ''] = email.split('@');
+    if (!localPart) {
+      return email;
+    }
+
+    const visibleLocal = localPart.length <= 1 ? localPart : localPart[0];
+    return `${visibleLocal}${'*'.repeat(
+      Math.max(localPart.length - 1, 1),
+    )}@${domain}`;
+  }
+
+  private normalizePhoneNumber(value: string) {
+    const digitsOnly = value.replace(/\D/g, '');
+
+    if (digitsOnly.startsWith('251') && digitsOnly.length === 12) {
+      return `0${digitsOnly.slice(3)}`;
+    }
+
+    if (digitsOnly.length === 9 && !digitsOnly.startsWith('0')) {
+      return `0${digitsOnly}`;
+    }
+
+    return digitsOnly.length > 0 ? digitsOnly : value.trim();
   }
 }
 

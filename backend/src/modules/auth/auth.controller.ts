@@ -1,14 +1,18 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 
 import { Public, CurrentUser } from '../../common/decorators';
 import { JwtAuthGuard } from '../../common/guards';
+import { AuthSecurityService } from './auth-security.service';
 import { AuthService } from './auth.service';
 import {
   CheckExistingAccountDto,
+  LookupOnboardingStatusDto,
   MemberLoginDto,
   RefreshTokenDto,
+  RecoveryOptionsDto,
   RegisterMemberDto,
   RequestOtpDto,
+  ResetPinDto,
   StartLoginDto,
   StaffLoginDto,
   VerifyPinLoginDto,
@@ -18,7 +22,10 @@ import { AuthenticatedUser } from './interfaces';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authSecurityService: AuthSecurityService,
+  ) {}
 
   @Public()
   @Post('check-existing-account')
@@ -69,9 +76,27 @@ export class AuthController {
   }
 
   @Public()
+  @Post('recovery-options')
+  getRecoveryOptions(@Body() dto: RecoveryOptionsDto) {
+    return this.authService.getRecoveryOptions(dto);
+  }
+
+  @Public()
   @Post('verify-otp')
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto);
+  }
+
+  @Public()
+  @Post('onboarding-status')
+  getOnboardingStatus(@Body() dto: LookupOnboardingStatusDto) {
+    return this.authService.getOnboardingStatus(dto);
+  }
+
+  @Public()
+  @Post('reset-pin')
+  resetPin(@Body() dto: ResetPinDto) {
+    return this.authService.resetPin(dto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -84,6 +109,21 @@ export class AuthController {
   @Get('me')
   getCurrentSession(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.authService.getCurrentSession(currentUser);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('security-overview')
+  getSecurityOverview(@CurrentUser() currentUser: AuthenticatedUser) {
+    return this.authSecurityService.getSecurityOverview(currentUser);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('sessions/:challengeId')
+  revokeSession(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('challengeId') challengeId: string,
+  ) {
+    return this.authSecurityService.revokeSession(currentUser, challengeId);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -2,9 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
 import '../../../app/app_scope.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/models/index.dart';
+import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/app_input.dart';
+import '../../../shared/widgets/app_list_item.dart';
+import '../../../shared/widgets/app_new_badge.dart';
 import 'live_chat_detail_screen.dart';
 
 class LiveChatListScreen extends StatefulWidget {
@@ -37,16 +44,13 @@ class _LiveChatListScreenState extends State<LiveChatListScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _conversationsFuture ??=
-        AppScope.of(context).services.chatApi.fetchMyConversations();
+    _conversationsFuture ??= AppScope.of(context).services.chatApi.fetchMyConversations();
     _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _conversationsFuture = AppScope.of(context).services.chatApi.fetchMyConversations();
+        });
       }
-      setState(() {
-        _conversationsFuture =
-            AppScope.of(context).services.chatApi.fetchMyConversations();
-      });
     });
   }
 
@@ -60,161 +64,107 @@ class _LiveChatListScreenState extends State<LiveChatListScreen> {
   @override
   Widget build(BuildContext context) {
     final services = AppScope.of(context).services;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
     final content = FutureBuilder<List<ChatConversation>>(
       future: _conversationsFuture,
       builder: (context, snapshot) {
         final conversations = snapshot.data ?? const <ChatConversation>[];
 
-        return SafeArea(
-          top: !widget.embeddedInTab,
-          child: RefreshIndicator(
-            onRefresh: () async {
-              final refreshed = services.chatApi.fetchMyConversations();
-              setState(() {
-                _conversationsFuture = refreshed;
-              });
-              await refreshed;
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                20,
-                widget.embeddedInTab ? 16 : 20,
-                20,
-                20 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.embeddedInTab) ...[
-                    Text(
-                      'Live Chat',
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Start support quickly, review recent conversations, and continue replies from the same thread used by the support console.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xFF64748B),
-                          ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  Text(
-                    'Start support quickly, choose the issue category, and send your first message to the same queue used by the support console.',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: const Color(0xFF64748B),
+        return RefreshIndicator(
+          onRefresh: () async {
+            final refreshed = services.chatApi.fetchMyConversations();
+            setState(() {
+              _conversationsFuture = refreshed;
+            });
+            await refreshed;
+          },
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              widget.embeddedInTab ? 12 : 20,
+              20,
+              24 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            children: [
+              if (widget.embeddedInTab)
+                const AppHeader(
+                  title: 'Chat',
+                  subtitle: 'Start a new support conversation or continue an existing one.',
+                  trailing: AppNewBadge(),
+                ),
+              if (widget.embeddedInTab) const SizedBox(height: 16),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Start a new chat',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                  ),
-                  const SizedBox(height: 20),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedCategory,
-                    dropdownColor: Colors.white,
-                    decoration: InputDecoration(
-                      labelText: 'Issue category',
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: Color(0xFFD8E3F5)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: Color(0xFFD8E3F5)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: cbeBlue),
-                      ),
+                        const SizedBox(width: 8),
+                        const AppNewBadge(),
+                      ],
                     ),
-                    items: _categories.entries
-                        .map(
-                          (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedCategory = value ?? 'general_help';
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _messageController,
-                    minLines: 4,
-                    maxLines: 5,
-                    decoration: InputDecoration(
+                    const SizedBox(height: 12),
+                    Text(
+                      'Choose the closest topic so the conversation reaches the right support desk faster.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedCategory,
+                      items: _categories.entries
+                          .map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value)))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCategory = value ?? 'general_help';
+                        });
+                      },
+                      decoration: const InputDecoration(labelText: 'Issue category'),
+                    ),
+                    const SizedBox(height: 12),
+                    AppInput(
+                      controller: _messageController,
+                      label: 'First message',
                       hintText: 'Briefly describe your issue',
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.all(16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: Color(0xFFD8E3F5)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: Color(0xFFD8E3F5)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: cbeBlue),
-                      ),
+                      minLines: 4,
+                      maxLines: 5,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
+                    const SizedBox(height: 12),
+                    AppButton(
+                      label: _creating ? 'Creating...' : 'Start Chat',
                       onPressed: _creating
                           ? null
                           : () async {
-                              final initialMessage =
-                                  _messageController.text.trim();
+                              final initialMessage = _messageController.text.trim();
                               if (initialMessage.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Enter a message before starting live chat.',
-                                    ),
-                                  ),
+                                  const SnackBar(content: Text('Enter a message before starting chat.')),
                                 );
                                 return;
                               }
-
                               setState(() {
                                 _creating = true;
                               });
-
                               try {
-                                final conversation =
-                                    await services.chatApi.createConversation(
+                                final conversation = await services.chatApi.createConversation(
                                   issueCategory: _selectedCategory,
                                   initialMessage: initialMessage,
                                 );
-
-                                if (!context.mounted) {
+                                if (!mounted) {
                                   return;
                                 }
-
                                 _messageController.clear();
                                 setState(() {
                                   _creating = false;
-                                  _conversationsFuture =
-                                      services.chatApi.fetchMyConversations();
+                                  _conversationsFuture = services.chatApi.fetchMyConversations();
                                 });
-
-                                await Navigator.of(context).push(
+                                await navigator.push(
                                   MaterialPageRoute<void>(
                                     builder: (_) => LiveChatDetailScreen(
                                       conversationId: conversation.id,
@@ -222,194 +172,107 @@ class _LiveChatListScreenState extends State<LiveChatListScreen> {
                                     ),
                                   ),
                                 );
-
-                                if (!context.mounted) {
-                                  return;
-                                }
-                                setState(() {
-                                  _conversationsFuture =
-                                      services.chatApi.fetchMyConversations();
-                                });
                               } catch (error) {
-                                if (!context.mounted) {
+                                if (!mounted) {
                                   return;
                                 }
                                 setState(() {
                                   _creating = false;
                                 });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _formatChatStartError(
-                                        error,
-                                        fallback:
-                                            'Unable to start support chat right now.',
-                                      ),
-                                    ),
-                                  ),
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(_formatChatStartError(error, fallback: 'Unable to start chat right now.'))),
                                 );
                               }
                             },
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      child: Text(
-                        _creating ? 'Creating...' : 'Start Live Chat',
-                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Divider(height: 1),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Recent Conversations',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Recent conversations',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          ),
                         ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (snapshot.hasError)
-                    const Card(
-                      child: ListTile(
-                        title: Text('Unable to load conversations'),
-                        subtitle: Text(
-                          'Pull to refresh or start a new chat.',
+                        Text(
+                          '${conversations.length}',
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
-                      ),
-                    )
-                  else if (conversations.isEmpty)
-                    const Card(
-                      child: ListTile(
-                        leading: Icon(Icons.chat_bubble_outline_rounded),
-                        title: Text('No conversations yet'),
-                        subtitle: Text('Tap Start Live Chat to begin.'),
-                      ),
-                    )
-                  else
-                    for (final conversation in conversations)
-                      Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEAF2FF),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(
-                              Icons.support_agent_rounded,
-                              color: cbeBlue,
-                            ),
-                          ),
-                          title: Text(
-                            _categories[conversation.issueCategory] ??
-                                conversation.issueCategory,
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                conversation.latestMessage?.message ??
-                                    'No messages yet.',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${conversation.memberName} • ${conversation.branchName ?? 'Bunna Bank'}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: const Color(0xFF64748B)),
-                              ),
-                            ],
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                _formatStatus(conversation.status),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      color: cbeBlue,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatTime(conversation.updatedAt),
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                            ],
-                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (snapshot.hasError)
+                      const Text('Unable to load conversations. Pull to refresh.')
+                    else if (conversations.isEmpty)
+                      const Text('No conversations yet.')
+                    else
+                      for (var index = 0; index < conversations.length; index++) ...[
+                        AppListItem(
+                          title: _categories[conversations[index].issueCategory] ?? conversations[index].issueCategory,
+                          subtitle: conversations[index].latestMessage?.message ?? 'No messages yet.',
+                          icon: Icons.support_agent_outlined,
+                          badge: _formatStatus(conversations[index].status),
+                          badgeTone: _statusTone(conversations[index].status),
                           onTap: () async {
                             await Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) => LiveChatDetailScreen(
-                                  conversationId: conversation.id,
-                                ),
+                                builder: (_) => LiveChatDetailScreen(conversationId: conversations[index].id),
                               ),
                             );
-                            if (!context.mounted) {
-                              return;
+                            if (mounted) {
+                              setState(() {
+                                _conversationsFuture = services.chatApi.fetchMyConversations();
+                              });
                             }
-                            setState(() {
-                              _conversationsFuture =
-                                  services.chatApi.fetchMyConversations();
-                            });
                           },
                         ),
-                      ),
-                ],
+                        if (index != conversations.length - 1) const Divider(height: 1),
+                      ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         );
       },
     );
 
     if (widget.embeddedInTab) {
-      return Material(
-        color: const Color(0xFFF5F7FB),
-        child: content,
-      );
+      return Material(color: Colors.white, child: SafeArea(top: false, child: content));
     }
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        leading: const BackButton(),
-        title: const Text('Live Chat'),
-      ),
-      body: Material(
-        color: const Color(0xFFF5F7FB),
-        child: content,
-      ),
+    return AppScaffold(
+      title: 'Live Chat',
+      showBack: true,
+      body: Material(color: Colors.white, child: SafeArea(top: false, child: content)),
     );
   }
 
-  String _formatStatus(String value) =>
-      value.replaceAll('_', ' ').toUpperCase();
+  String _formatStatus(String value) => value.replaceAll('_', ' ');
 
-  String _formatTime(DateTime value) {
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+  AppBadgeTone _statusTone(String value) {
+    switch (value) {
+      case 'resolved':
+        return AppBadgeTone.success;
+      case 'assigned':
+      case 'open':
+        return AppBadgeTone.primary;
+      case 'waiting_customer':
+        return AppBadgeTone.warning;
+      default:
+        return AppBadgeTone.neutral;
+    }
   }
 }
 
 String _formatChatStartError(Object error, {required String fallback}) {
   final text = error.toString().replaceFirst('Exception: ', '').trim();
-  if (text.isEmpty) {
-    return fallback;
-  }
-  return text;
+  return text.isEmpty ? fallback : text;
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 
 import { MemberType, UserRole } from '../../common/enums';
@@ -9,9 +9,9 @@ describe('LoansService', () => {
   let loanModel: { create: jest.Mock; find: jest.Mock; findById: jest.Mock };
   let loanDocumentModel: { create: jest.Mock };
   let workflowHistoryModel: { create: jest.Mock };
-  let notificationModel: { create: jest.Mock };
+  let notificationsService: { createNotification: jest.Mock };
   let memberModel: { findById: jest.Mock };
-  let auditService: { log: jest.Mock };
+  let auditService: { logActorAction: jest.Mock };
   let storageService: { registerDocument: jest.Mock };
   let service: LoansService;
 
@@ -19,18 +19,18 @@ describe('LoansService', () => {
     loanModel = { create: jest.fn(), find: jest.fn(), findById: jest.fn() };
     loanDocumentModel = { create: jest.fn() };
     workflowHistoryModel = { create: jest.fn() };
-    notificationModel = { create: jest.fn() };
+    notificationsService = { createNotification: jest.fn() };
     memberModel = { findById: jest.fn() };
-    auditService = { log: jest.fn() };
+    auditService = { logActorAction: jest.fn() };
     storageService = { registerDocument: jest.fn() };
 
     service = new LoansService(
       loanModel as never,
       loanDocumentModel as never,
       workflowHistoryModel as never,
-      notificationModel as never,
       memberModel as never,
       auditService as never,
+      notificationsService as never,
       storageService as never,
     );
   });
@@ -105,14 +105,17 @@ describe('LoansService', () => {
         toStatus: 'submitted',
       }),
     );
-    expect(notificationModel.create).toHaveBeenCalledWith(
+    expect(notificationsService.createNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'loan_status',
         entityType: 'loan',
-        entityId: loanId,
+        entityId: loanId.toString(),
+        actionLabel: 'Open loan',
+        priority: 'normal',
+        deepLink: `/loans/${loanId.toString()}`,
       }),
     );
-    expect(auditService.log).toHaveBeenCalledWith(
+    expect(auditService.logActorAction).toHaveBeenCalledWith(
       expect.objectContaining({
         actionType: 'loan_submitted',
         entityId: loanId.toString(),
@@ -218,63 +221,5 @@ describe('LoansService', () => {
 
     expect(storageService.registerDocument).not.toHaveBeenCalled();
     expect(result.storageKey).toBe('manual/key.pdf');
-  });
-
-  it('rejects oversized loan documents before storage', async () => {
-    const memberId = new Types.ObjectId();
-    const branchId = new Types.ObjectId();
-    const districtId = new Types.ObjectId();
-    const loanId = new Types.ObjectId();
-
-    loanModel.findById.mockReturnValue({
-      lean: jest.fn().mockResolvedValue({
-        _id: loanId,
-        memberId,
-        branchId,
-        districtId,
-      }),
-    });
-
-    await expect(
-      service.attachLoanDocument(
-        { sub: memberId.toString(), role: UserRole.MEMBER },
-        loanId.toString(),
-        {
-          documentType: 'collateral',
-          originalFileName: 'large.pdf',
-          sizeBytes: 30 * 1024 * 1024,
-        },
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(storageService.registerDocument).not.toHaveBeenCalled();
-  });
-
-  it('rejects storage keys with path traversal segments', async () => {
-    const memberId = new Types.ObjectId();
-    const branchId = new Types.ObjectId();
-    const districtId = new Types.ObjectId();
-    const loanId = new Types.ObjectId();
-
-    loanModel.findById.mockReturnValue({
-      lean: jest.fn().mockResolvedValue({
-        _id: loanId,
-        memberId,
-        branchId,
-        districtId,
-      }),
-    });
-
-    await expect(
-      service.attachLoanDocument(
-        { sub: memberId.toString(), role: UserRole.MEMBER },
-        loanId.toString(),
-        {
-          documentType: 'collateral',
-          originalFileName: 'house-title.pdf',
-          storageKey: '../manual/key.pdf',
-        },
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

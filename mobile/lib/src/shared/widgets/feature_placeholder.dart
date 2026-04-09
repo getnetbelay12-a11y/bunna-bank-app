@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../theme/cbe_bank_theme.dart';
+import '../../../theme/amhara_brand_theme.dart';
 
 class FeaturePlaceholder extends StatelessWidget {
   const FeaturePlaceholder({
@@ -34,7 +34,7 @@ class FeaturePlaceholder extends StatelessWidget {
           Text(
             description,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFF5C5C5C),
+              color: abayTextSoft,
             ),
           ),
           const SizedBox(height: 20),
@@ -42,7 +42,7 @@ class FeaturePlaceholder extends StatelessWidget {
             width: 56,
             height: 4,
             decoration: BoxDecoration(
-              color: cbeLightBlue,
+              color: abayRoseTint,
               borderRadius: BorderRadius.circular(999),
             ),
           ),

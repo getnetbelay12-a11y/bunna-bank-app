@@ -7,14 +7,14 @@ type PanelProps = PropsWithChildren<{
 
 export function Panel({ title, description, children }: PanelProps) {
   return (
-    <section className="panel">
+    <section className="panel legacy-panel">
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
           {description ? <p className="muted">{description}</p> : null}
         </div>
       </div>
-      {children}
+      <div className="panel-body">{children}</div>
     </section>
   );
 }

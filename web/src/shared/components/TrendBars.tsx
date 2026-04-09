@@ -3,9 +3,22 @@ type TrendBarsProps = {
     label: string;
     value: number;
   }>;
+  emptyState?: {
+    title: string;
+    description: string;
+  };
 };
 
-export function TrendBars({ items }: TrendBarsProps) {
+export function TrendBars({ items, emptyState }: TrendBarsProps) {
+  if (items.length === 0) {
+    return (
+      <div className="simple-table-empty-state">
+        <strong>{emptyState?.title ?? 'No trend data yet'}</strong>
+        <span>{emptyState?.description ?? 'Trend data will appear here when activity is available.'}</span>
+      </div>
+    );
+  }
+
   const max = Math.max(...items.map((item) => item.value), 1);
 
   return (

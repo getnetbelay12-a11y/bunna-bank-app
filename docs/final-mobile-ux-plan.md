@@ -30,7 +30,7 @@ The main repair pattern was:
 
 ## Home Changes
 
-- kept the familiar CBE Bank structure close to the reference app
+- kept the familiar Bunna Bank structure close to the reference app
 - retained welcome header
 - retained a dominant balance card
 - retained a quick actions icon grid

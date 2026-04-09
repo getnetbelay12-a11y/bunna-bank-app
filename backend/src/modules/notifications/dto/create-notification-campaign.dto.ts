@@ -5,7 +5,6 @@ import {
   IsEmail,
   IsEnum,
   IsIn,
-  IsMongoId,
   IsObject,
   IsOptional,
   IsString,
@@ -39,7 +38,7 @@ export class CreateNotificationCampaignDto {
   )
   @IsArray()
   @ArrayNotEmpty()
-  @IsMongoId({ each: true })
+  @IsString({ each: true })
   targetIds?: string[];
 
   @IsOptional()

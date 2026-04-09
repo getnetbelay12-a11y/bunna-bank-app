@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { useAppClient } from '../../app/AppContext';
 import type { AdminSession } from '../../core/session';
@@ -13,7 +13,7 @@ export function NotificationsCenterPage({
   session,
 }: NotificationsCenterPageProps) {
   const { notificationApi } = useAppClient();
-  const [rows, setRows] = useState<string[][]>([['Loading', '...', '...', '...']]);
+  const [rows, setRows] = useState<ReactNode[][]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +26,8 @@ export function NotificationsCenterPage({
             item.userLabel,
             item.status,
             item.sentAt,
+            item.actionLabel ?? 'No action',
+            item.deepLink ? <code>{item.deepLink}</code> : 'No target',
           ]),
         );
       }
@@ -42,7 +44,14 @@ export function NotificationsCenterPage({
         title="Notifications Center"
         description="Staff and member-facing notifications should be searchable and filterable here."
       >
-        <SimpleTable headers={['Type', 'User', 'Status', 'Sent']} rows={rows} />
+        <SimpleTable
+          headers={['Type', 'User', 'Status', 'Sent', 'Action', 'Target']}
+          rows={rows}
+          emptyState={{
+            title: 'No notification records yet',
+            description: 'Notification activity will appear here when staff or customer delivery events are available.',
+          }}
+        />
       </Panel>
     </div>
   );

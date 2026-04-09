@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { FloatingChatButton } from '../../shared/components/BankingDashboard';
 import { SupportChatWorkspace } from './SupportChatWorkspace';
 
 export function FloatingSupportChatLauncher() {
@@ -8,18 +9,11 @@ export function FloatingSupportChatLauncher() {
 
   return (
     <>
-      <button
-        aria-expanded={isOpen}
-        aria-label="Open support chat panel"
-        className="floating-support-button"
+      <FloatingChatButton
+        unreadCount={unreadCount}
+        isOpen={isOpen}
         onClick={() => setIsOpen((current) => !current)}
-        type="button"
-      >
-        <span className="floating-support-icon" aria-hidden="true">
-          💬
-        </span>
-        {unreadCount ? <span className="floating-support-badge">{unreadCount}</span> : null}
-      </button>
+      />
 
       {isOpen ? (
         <section aria-label="Support Chat Panel" className="floating-support-panel">

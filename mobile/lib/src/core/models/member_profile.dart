@@ -9,6 +9,8 @@ class MemberProfile {
     required this.memberType,
     required this.membershipStatus,
     required this.identityVerificationStatus,
+    required this.onboardingReviewStatus,
+    this.onboardingReviewNote,
   });
 
   final String memberId;
@@ -20,4 +22,6 @@ class MemberProfile {
   final String memberType;
   final String membershipStatus;
   final String identityVerificationStatus;
+  final String onboardingReviewStatus;
+  final String? onboardingReviewNote;
 }

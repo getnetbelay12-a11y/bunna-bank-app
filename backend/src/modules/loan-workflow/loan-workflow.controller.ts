@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 
 import { CurrentUser, Roles } from '../../common/decorators';
 import { UserRole } from '../../common/enums';
@@ -20,6 +20,27 @@ import { LoanWorkflowService } from './loan-workflow.service';
 @Controller('loan-workflow')
 export class LoanWorkflowController {
   constructor(private readonly loanWorkflowService: LoanWorkflowService) {}
+
+  @Get('queue')
+  getLoanQueue(@CurrentUser() currentUser: AuthenticatedUser) {
+    return this.loanWorkflowService.getLoanQueue(currentUser);
+  }
+
+  @Get('queue/:loanId')
+  getLoanQueueDetail(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('loanId') loanId: string,
+  ) {
+    return this.loanWorkflowService.getLoanQueueDetail(currentUser, loanId);
+  }
+
+  @Get('queue/:loanId/customer-profile')
+  getLoanCustomerProfile(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('loanId') loanId: string,
+  ) {
+    return this.loanWorkflowService.getLoanCustomerProfile(currentUser, loanId);
+  }
 
   @Patch(':loanId/action')
   processAction(

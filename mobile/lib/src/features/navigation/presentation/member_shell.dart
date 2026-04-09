@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../../theme/amhara_brand_theme.dart';
 import '../../../app/app_scope.dart';
 import '../../../core/models/member_session.dart';
 import '../../chat/presentation/support_home_screen.dart';
-import '../../help_support/presentation/help_support_screen.dart';
 import '../../home/presentation/home_dashboard_screen.dart';
-import '../../loans/presentation/my_loans_screen.dart';
 import '../../membership/presentation/fayda_verification_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../payments/presentation/payments_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
-
-const Color _shellPrimaryPurple = Color(0xFF7A1618);
-const Color _shellMuted = Color(0xFF6B7280);
+import '../../transactions/presentation/transactions_screen.dart';
 
 class MemberShell extends StatefulWidget {
   const MemberShell({
@@ -38,7 +35,19 @@ class _MemberShellState extends State<MemberShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(currentTab.label),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(currentTab.label),
+            Text(
+              widget.session.branchName,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: abayTopBarMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
@@ -52,116 +61,126 @@ class _MemberShellState extends State<MemberShell> {
             },
           ),
         ],
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu_rounded),
-            onPressed: () {
-              controller.markInteraction();
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
+        leading: _currentIndex == 0
+            ? Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu_rounded),
+                  onPressed: () {
+                    controller.markInteraction();
+                    Scaffold.of(context).openDrawer();
+                  },
+                ),
+              )
+            : IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () {
+                  controller.markInteraction();
+                  setState(() {
+                    _currentIndex = 0;
+                  });
+                },
+              ),
       ),
       drawer: Drawer(
         child: SafeArea(
           child: Column(
             children: [
-              ListTile(
-                title: Text(
-                  widget.session.fullName,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(color: abayBorder),
+                  ),
                 ),
-                subtitle: Text(widget.session.customerId),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.session.fullName,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.session.customerId,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: abayTextSoft,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(widget.session.branchName),
+                  ],
+                ),
               ),
               const Divider(),
-              _DrawerItem(
-                label: 'Payments',
-                icon: Icons.payments_rounded,
-                onTap: () => _switchTab(context, 1),
-              ),
-              _DrawerItem(
-                label: 'Loans',
-                icon: Icons.account_balance_wallet_rounded,
-                onTap: () => _switchTab(context, 2),
-              ),
-              _DrawerItem(
-                label: 'Live Chat',
-                icon: Icons.chat_bubble_rounded,
-                onTap: () => _switchTab(context, 3),
-              ),
-              _DrawerItem(
-                label: 'Profile',
-                icon: Icons.person_rounded,
-                onTap: () => _switchTab(context, 4),
-              ),
-              _DrawerItem(
-                label: 'Notifications',
-                icon: Icons.notifications_none_rounded,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const NotificationsScreen(),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _DrawerItem(label: 'Home', icon: Icons.home_rounded, onTap: () => _switchTab(context, 0)),
+                    _DrawerItem(label: 'Payments', icon: Icons.payments_rounded, onTap: () => _switchTab(context, 1)),
+                    _DrawerItem(label: 'Transactions', icon: Icons.receipt_long_rounded, onTap: () => _switchTab(context, 2)),
+                    _DrawerItem(label: 'Support', icon: Icons.chat_bubble_rounded, onTap: () => _switchTab(context, 3)),
+                    _DrawerItem(label: 'Profile', icon: Icons.person_rounded, onTap: () => _switchTab(context, 4)),
+                    _DrawerItem(
+                      label: 'Notifications',
+                      icon: Icons.notifications_none_rounded,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              _DrawerItem(
-                label: 'KYC Verification',
-                icon: Icons.verified_user_rounded,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const FaydaVerificationScreen(),
+                    _DrawerItem(
+                      label: 'KYC Verification',
+                      icon: Icons.verified_user_rounded,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const FaydaVerificationScreen(),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              _DrawerItem(
-                label: 'Security Settings',
-                icon: Icons.lock_rounded,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SettingsScreen(),
+                    _DrawerItem(
+                      label: 'Security Settings',
+                      icon: Icons.lock_rounded,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const SettingsScreen(),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              _DrawerItem(
-                label: 'Help & Support',
-                icon: Icons.help_outline_rounded,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const HelpSupportScreen(),
+                    _DrawerItem(
+                      label: 'About',
+                      icon: Icons.info_outline_rounded,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        showAboutDialog(
+                          context: context,
+                          applicationName: 'Bunna Bank',
+                          applicationVersion: '0.1.0',
+                          children: const [
+                            Text(
+                              'Simple Ethiopian banking-style mobile experience for members, KYC, loans, and notifications.',
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-              _DrawerItem(
-                label: 'About',
-                icon: Icons.info_outline_rounded,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  showAboutDialog(
-                    context: context,
-                    applicationName: 'Bunna Bank',
-                    applicationVersion: '0.1.0',
-                    children: const [
-                      Text(
-                        'Simple Ethiopian banking-style mobile experience for members, KYC, loans, and notifications.',
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const Spacer(),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: FilledButton.icon(
@@ -188,8 +207,9 @@ class _MemberShellState extends State<MemberShell> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        selectedItemColor: _shellPrimaryPurple,
-        unselectedItemColor: _shellMuted,
+        backgroundColor: abayPrimary,
+        selectedItemColor: abayAccent,
+        unselectedItemColor: abayNavUnselected,
         type: BottomNavigationBarType.fixed,
         items: [
           for (final tab in tabs)
@@ -218,15 +238,15 @@ class _MemberShellState extends State<MemberShell> {
       const _MemberTab(
         label: 'Payments',
         icon: Icons.payments_rounded,
-        screen: PaymentsScreen(),
+        screen: PaymentsScreen(embeddedInTab: true),
       ),
       const _MemberTab(
-        label: 'Loans',
-        icon: Icons.account_balance_wallet_rounded,
-        screen: MyLoansScreen(),
+        label: 'Transactions',
+        icon: Icons.receipt_long_rounded,
+        screen: TransactionsScreen(embeddedInTab: true),
       ),
       const _MemberTab(
-        label: 'Live Chat',
+        label: 'Support',
         icon: Icons.chat_bubble_rounded,
         screen: SupportHomeScreen(),
       ),
@@ -273,7 +293,7 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: _shellPrimaryPurple),
+      leading: Icon(icon, color: abayPrimary),
       title: Text(label),
       onTap: onTap,
     );

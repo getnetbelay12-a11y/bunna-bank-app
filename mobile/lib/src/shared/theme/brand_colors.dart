@@ -1,10 +1,11 @@
-import '../../../theme/cbe_bank_theme.dart';
+import '../../../theme/amhara_brand_theme.dart';
 
 class BrandColors {
   const BrandColors._();
 
-  static const primaryGreen = cbeBlue;
-  static const primaryGreenDark = cbeBlue;
-  static const primaryGreenLight = cbeLightBlue;
-  static const neutralBackground = cbeBackground;
+  static const primary = abayPrimary;
+  static const primaryDark = abayPrimaryDeep;
+  static const primaryLight = abayRoseTint;
+  static const accent = abayAccent;
+  static const neutralBackground = abayBackground;
 }

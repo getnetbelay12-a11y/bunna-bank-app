@@ -5,9 +5,32 @@ import { AppClientContext } from '../../app/AppContext';
 import { AdminRole, type AdminSession } from '../../core/session';
 import { DashboardShell } from './DashboardShell';
 
+const emptyOverview = {
+  scope: 'district',
+  period: 'week',
+  generatedAt: new Date('2026-03-12T00:00:00.000Z').toISOString(),
+  kpis: {
+    membersServed: 0,
+    customersHelped: 0,
+    loansHandled: 0,
+    loansApproved: 0,
+    loansEscalated: 0,
+    kycCompleted: 0,
+    supportResolved: 0,
+    transactionsProcessed: 0,
+    avgHandlingTime: 0,
+    pendingTasks: 0,
+    pendingApprovals: 0,
+    responseTimeMinutes: 0,
+    score: 0,
+    status: 'good' as const,
+  },
+  items: [],
+};
+
 const supportChatDetail = {
   conversationId: 'chat_1',
-  customerId: 'CUST-1001',
+  customerId: 'BUN-100001',
   status: 'open',
   issueCategory: 'general_support',
   memberType: 'member',
@@ -29,6 +52,10 @@ const appClient = {
     getDistrictPerformance: vi.fn().mockResolvedValue([]),
     getStaffRanking: vi.fn().mockResolvedValue([]),
     getVotingSummary: vi.fn().mockResolvedValue([]),
+    getOnboardingReviewQueue: vi.fn().mockResolvedValue([]),
+    getAutopayOperations: vi.fn().mockResolvedValue([]),
+    updateAutopayOperation: vi.fn(),
+    updateOnboardingReview: vi.fn(),
     getHeadOfficeDistrictSummary: vi.fn().mockResolvedValue({
       scope: 'district',
       period: 'week',
@@ -101,6 +128,31 @@ const appClient = {
     }),
     getBranchTopEmployees: vi.fn().mockResolvedValue([]),
     getBranchEmployeeWatchlist: vi.fn().mockResolvedValue([]),
+    getHeadOfficeCommandCenter: vi.fn().mockResolvedValue({
+      totalCustomers: 0,
+      totalShareholders: 0,
+      totalSavings: 0,
+      totalLoans: 0,
+      pendingApprovals: 0,
+      riskAlerts: { totalAlerts: 0, loanAlerts: 0, kycAlerts: 0, supportAlerts: 0, notificationAlerts: 0 },
+      districtPerformance: emptyOverview,
+      supportOverview: { openChats: 0, assignedChats: 0, resolvedChats: 0, escalatedChats: 0 },
+      governanceStatus: { activeVotes: 0, draftVotes: 0, publishedVotes: 0, shareholderAnnouncements: 0 },
+    }),
+    getDistrictCommandCenter: vi.fn().mockResolvedValue({
+      branchList: [],
+      branchRanking: [],
+      loanApprovalsPerBranch: [],
+      kycCompletion: { completed: 0, pendingReview: 0, needsAction: 0, completionRate: 0 },
+      supportMetrics: { openChats: 0, assignedChats: 0, resolvedChats: 0, escalatedChats: 0 },
+    }),
+    getBranchCommandCenter: vi.fn().mockResolvedValue({
+      employeePerformance: emptyOverview,
+      loansHandled: 0,
+      kycCompleted: 0,
+      supportHandled: 0,
+      pendingTasks: 0,
+    }),
     getVotingPerformance: vi.fn().mockResolvedValue([]),
     getSupportQueue: vi.fn().mockResolvedValue([]),
     getNotifications: vi.fn().mockResolvedValue([]),
@@ -139,8 +191,25 @@ const appClient = {
     getLogs: vi.fn().mockResolvedValue([]),
     getInsuranceAlerts: vi.fn().mockResolvedValue([]),
   },
+  recommendationApi: {
+    getDashboardSummary: vi.fn().mockResolvedValue({
+      recommendationsGeneratedToday: 12,
+      topRecommendationType: 'customer_followup',
+      completionRate: 35,
+      dismissedRate: 8,
+      highOpportunityCustomers: 6,
+      customersMissingKyc: 2,
+      customersSuitableForAutopay: 4,
+    }),
+    getCustomerRecommendations: vi.fn().mockResolvedValue({
+      title: 'Smart Recommendations',
+      recommendations: [],
+    }),
+    generateForCustomer: vi.fn().mockResolvedValue(undefined),
+  },
   auditApi: {
     getByEntity: vi.fn().mockResolvedValue([]),
+    getEntityAuditTrail: vi.fn().mockResolvedValue([]),
     getByActor: vi.fn().mockResolvedValue([]),
   },
   supportApi: {
@@ -164,8 +233,8 @@ describe('DashboardShell sidebar signed-in card', () => {
   it('shows the full name only once in the top-right header', () => {
     const session: AdminSession = {
       userId: 'head_1',
-      fullName: 'Selamawit Assefa',
-      role: AdminRole.HEAD_OFFICE_MANAGER,
+      fullName: 'Lulit Mekonnen',
+      role: AdminRole.HEAD_OFFICE_DIRECTOR,
       branchName: 'Head Office',
     };
 
@@ -175,8 +244,9 @@ describe('DashboardShell sidebar signed-in card', () => {
       </AppClientContext.Provider>,
     );
 
-    expect(screen.getAllByText('Selamawit Assefa')).toHaveLength(1);
-    expect(screen.getByText('Signed In')).toBeInTheDocument();
-    expect(screen.getByText('Institution-wide view')).toBeInTheDocument();
+    expect(screen.getAllByText('Lulit Mekonnen')).toHaveLength(1);
+    expect(screen.getByText('Head Office Director')).toBeInTheDocument();
+    expect(screen.getByText('Institution-wide operations')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open notifications/i })).toBeInTheDocument();
   });
 });

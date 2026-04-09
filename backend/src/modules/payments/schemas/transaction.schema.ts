@@ -39,6 +39,9 @@ export class Transaction {
 
   @Prop({ trim: true })
   narration?: string;
+
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);

@@ -8,7 +8,7 @@ describe('HealthController', () => {
     const connection = {
       readyState: 1,
       db: {
-        databaseName: 'cbe_bank_app',
+        databaseName: 'bunna_bank_app',
       },
     } as unknown as Connection;
 
@@ -19,7 +19,7 @@ describe('HealthController', () => {
         }
 
         if (key === 'database.databaseName') {
-          return 'cbe_bank_app';
+          return 'bunna_bank_app';
         }
 
         return undefined;
@@ -30,10 +30,10 @@ describe('HealthController', () => {
 
     expect(controller.getHealth()).toEqual({
       status: 'ok',
-      service: 'CBE backend',
+      service: 'Bunna backend',
       port: 4000,
       database: 'connected',
-      databaseName: 'cbe_bank_app',
+      databaseName: 'bunna_bank_app',
     });
   });
 });

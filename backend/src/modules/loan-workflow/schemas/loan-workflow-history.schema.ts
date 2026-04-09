@@ -39,6 +39,9 @@ export class LoanWorkflowHistory {
 
   @Prop({ trim: true })
   comment?: string;
+
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const LoanWorkflowHistorySchema =

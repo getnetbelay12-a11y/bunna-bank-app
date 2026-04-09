@@ -14,7 +14,7 @@ if (releaseKeystoreFile.exists()) {
 }
 
 android {
-    namespace = "com.cbe.bank.mobile"
+    namespace = "com.bunna.bank.mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.cbe.bank.mobile"
+        applicationId = "com.bunna.bank.mobile"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -2,14 +2,14 @@
 
 ## What Exists Now
 
-- The CBE Bank mobile app already uses a recognizable dark blue, yellow, and white visual identity.
+- The Bunna Bank mobile app already uses a recognizable dark blue, yellow, and white visual identity.
 - The familiar customer experience centers on a simple banking home page with welcome text, a balance area, shortcut icons, promotional/banner content, and bottom navigation.
 - The app already includes customer-facing flows for login, account creation start, KYC/Fayda onboarding, payments, loans, notifications, profile, and live chat.
 - Support and live chat are now connected to the support console through shared backend chat conversations and messages.
 
 ## What Should Remain
 
-- The Home page should remain visually close to the current CBE Bank layout.
+- The Home page should remain visually close to the current Bunna Bank layout.
 - The brand foundation should remain dark blue primary, yellow accents, and light content surfaces.
 - The familiar customer grouping should remain:
   - `Home`

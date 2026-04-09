@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
 import { MemberType } from '../../../common/enums';
+import { Loan } from '../../loans/schemas/loan.schema';
 import { ChatIssueCategory } from '../dto';
 
 export type ChatConversationDocument = HydratedDocument<ChatConversation>;
@@ -41,6 +42,17 @@ export class ChatConversation {
 
   @Prop({ trim: true })
   assignedToStaffName?: string;
+
+  @Prop({ type: Types.ObjectId, ref: Loan.name, index: true })
+  loanId?: Types.ObjectId;
+
+  @Prop({
+    required: true,
+    enum: ['general', 'branch', 'district', 'head_office'],
+    default: 'general',
+    index: true,
+  })
+  routingLevel!: 'general' | 'branch' | 'district' | 'head_office';
 
   @Prop({
     required: true,
@@ -90,4 +102,10 @@ ChatConversationSchema.index({
   status: 1,
   assignedToStaffId: 1,
   lastMessageAt: -1,
+});
+ChatConversationSchema.index({
+  memberId: 1,
+  loanId: 1,
+  routingLevel: 1,
+  status: 1,
 });

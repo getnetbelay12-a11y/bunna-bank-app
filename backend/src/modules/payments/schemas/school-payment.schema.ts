@@ -34,6 +34,10 @@ export class SchoolPayment {
 
   @Prop({ required: true, enum: ['successful', 'failed'], index: true })
   status!: 'successful' | 'failed';
+
+  createdAt?: Date;
+
+  updatedAt?: Date;
 }
 
 export const SchoolPaymentSchema = SchemaFactory.createForClass(SchoolPayment);

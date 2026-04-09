@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
+import '../../../../theme/amhara_brand_theme.dart';
 import '../../../app/app_scope.dart';
 import '../../../core/models/member_session.dart';
 import '../../account_relationships/presentation/account_relationships_screen.dart';
-import '../../announcements/presentation/shareholder_announcements_screen.dart';
 import '../../autopay/presentation/auto_payment_screen.dart';
 import '../../atm_orders/presentation/atm_order_screen.dart';
 import '../../chat/presentation/live_chat_list_screen.dart';
 import '../../loans/presentation/my_loans_screen.dart';
 import '../../phone_number_update/presentation/phone_number_update_screen.dart';
-import '../../voting/presentation/voting_screen.dart';
+import '../../service_requests/presentation/service_request_list_screen.dart';
+import '../../shareholder/presentation/shareholder_dashboard_screen.dart';
 
 class MyBankScreen extends StatelessWidget {
   const MyBankScreen({
@@ -26,13 +26,31 @@ class MyBankScreen extends StatelessWidget {
 
     return FutureBuilder<List<dynamic>>(
       future: Future.wait<dynamic>([
-        session.featureFlags.voting
+        session.isShareholder && session.featureFlags.voting
             ? services.votingApi.fetchActiveVotes()
             : Future.value(const []),
       ]),
       builder: (context, snapshot) {
         final hasActiveVote =
             (snapshot.data?.first as List<dynamic>? ?? const []).isNotEmpty;
+        final shareholderItems = <_BankFeature>[
+          if (session.isShareholder)
+            _BankFeature(
+              title: 'Shareholder Dashboard',
+              subtitle: hasActiveVote
+                  ? 'Voting, announcements, and shareholder activity in one place.'
+                  : 'Summary, announcements, and future shareholder services.',
+              isNew: true,
+              icon: Icons.account_balance_rounded,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ShareholderDashboardScreen(session: session),
+                  ),
+                );
+              },
+            ),
+        ];
 
         final items = [
           _BankFeature(
@@ -70,6 +88,19 @@ class MyBankScreen extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const MyLoansScreen(),
+                ),
+              );
+            },
+          ),
+          _BankFeature(
+            title: 'Service Requests',
+            subtitle: 'Track disputes, card requests, phone updates, and account service workflows.',
+            isNew: true,
+            icon: Icons.assignment_rounded,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ServiceRequestListScreen(),
                 ),
               );
             },
@@ -114,35 +145,6 @@ class MyBankScreen extends StatelessWidget {
               );
             },
           ),
-          if (session.featureFlags.voting && hasActiveVote)
-            _BankFeature(
-              title: 'Shareholder Voting',
-              subtitle: 'Active governance event and shareholder announcements.',
-              isNew: true,
-              icon: Icons.how_to_vote_rounded,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const VotingScreen(),
-                  ),
-                );
-              },
-            ),
-          if (session.featureFlags.voting)
-            _BankFeature(
-              title: 'Shareholder Messages',
-              subtitle:
-                  'AGM notices, dividend updates, and governance announcements.',
-              isNew: true,
-              icon: Icons.campaign_rounded,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ShareholderAnnouncementsScreen(),
-                  ),
-                );
-              },
-            ),
           const _BankFeature(
             title: 'Branch / ATM Locator',
             subtitle: 'Find branches, ATMs, and future location tools.',
@@ -169,7 +171,7 @@ class MyBankScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: cbeBlue,
+                  color: abayPrimary,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Column(
@@ -210,7 +212,7 @@ class MyBankScreen extends StatelessWidget {
                       horizontal: 18,
                       vertical: 8,
                     ),
-                    leading: Icon(item.icon, color: cbeBlue),
+                    leading: Icon(item.icon, color: abayPrimary),
                     title: Row(
                       children: [
                         Expanded(child: Text(item.title)),
@@ -227,7 +229,7 @@ class MyBankScreen extends StatelessWidget {
                             child: const Text(
                               'New',
                               style: TextStyle(
-                                color: cbeBlue,
+                                color: abayPrimary,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -239,6 +241,45 @@ class MyBankScreen extends StatelessWidget {
                     onTap: item.onTap,
                   ),
                 ),
+              if (shareholderItems.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Shareholder Services',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  hasActiveVote
+                      ? 'Voting and governance messages are available for eligible shareholder members.'
+                      : 'Governance voting appears here only while an event is active.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: abayTextSoft,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                for (final item in shareholderItems)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFB9DBFF)),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 8,
+                      ),
+                      leading: Icon(item.icon, color: abayPrimary),
+                      title: Text(item.title),
+                      subtitle: Text(item.subtitle),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: item.onTap,
+                    ),
+                  ),
+              ],
               ],
             ),
           ),

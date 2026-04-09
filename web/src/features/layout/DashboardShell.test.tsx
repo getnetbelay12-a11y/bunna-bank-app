@@ -5,6 +5,29 @@ import { AppClientContext } from '../../app/AppContext';
 import { AdminRole, type AdminSession } from '../../core/session';
 import { DashboardShell } from './DashboardShell';
 
+const emptyOverview = {
+  scope: 'district',
+  period: 'week',
+  generatedAt: new Date('2026-03-12T00:00:00.000Z').toISOString(),
+  kpis: {
+    membersServed: 0,
+    customersHelped: 0,
+    loansHandled: 0,
+    loansApproved: 0,
+    loansEscalated: 0,
+    kycCompleted: 0,
+    supportResolved: 0,
+    transactionsProcessed: 0,
+    avgHandlingTime: 0,
+    pendingTasks: 0,
+    pendingApprovals: 0,
+    responseTimeMinutes: 0,
+    score: 0,
+    status: 'good' as const,
+  },
+  items: [],
+};
+
 const appClient = {
   authApi: {
     login: vi.fn(),
@@ -61,6 +84,10 @@ const appClient = {
         participationRate: 43.3,
       },
     ]),
+    getOnboardingReviewQueue: vi.fn().mockResolvedValue([]),
+    getAutopayOperations: vi.fn().mockResolvedValue([]),
+    updateAutopayOperation: vi.fn(),
+    updateOnboardingReview: vi.fn(),
     getHeadOfficeDistrictSummary: vi.fn().mockResolvedValue({
       scope: 'district',
       period: 'week',
@@ -81,7 +108,48 @@ const appClient = {
         score: 86,
         status: 'good',
       },
-      items: [],
+      items: [
+        {
+          entityId: 'district_addis',
+          entityType: 'district',
+          name: 'Addis Ababa District',
+          districtName: 'Addis Ababa District',
+          membersServed: 4520,
+          customersHelped: 4385,
+          loansHandled: 1108,
+          loansApproved: 586,
+          loansEscalated: 82,
+          kycCompleted: 912,
+          supportResolved: 1094,
+          transactionsProcessed: 5980,
+          avgHandlingTime: 11.2,
+          pendingTasks: 14,
+          pendingApprovals: 11,
+          responseTimeMinutes: 9.1,
+          score: 94,
+          status: 'excellent',
+        },
+        {
+          entityId: 'district_bahir',
+          entityType: 'district',
+          name: 'Bahir Dar District',
+          districtName: 'Bahir Dar District',
+          membersServed: 3210,
+          customersHelped: 2984,
+          loansHandled: 812,
+          loansApproved: 394,
+          loansEscalated: 104,
+          kycCompleted: 670,
+          supportResolved: 845,
+          transactionsProcessed: 4120,
+          avgHandlingTime: 13.8,
+          pendingTasks: 21,
+          pendingApprovals: 16,
+          responseTimeMinutes: 13,
+          score: 89,
+          status: 'excellent',
+        },
+      ],
     }),
     getHeadOfficeTopDistricts: vi.fn().mockResolvedValue([]),
     getHeadOfficeDistrictWatchlist: vi.fn().mockResolvedValue([]),
@@ -133,6 +201,31 @@ const appClient = {
     }),
     getBranchTopEmployees: vi.fn().mockResolvedValue([]),
     getBranchEmployeeWatchlist: vi.fn().mockResolvedValue([]),
+    getHeadOfficeCommandCenter: vi.fn().mockResolvedValue({
+      totalCustomers: 0,
+      totalShareholders: 0,
+      totalSavings: 0,
+      totalLoans: 0,
+      pendingApprovals: 0,
+      riskAlerts: { totalAlerts: 0, loanAlerts: 0, kycAlerts: 0, supportAlerts: 0, notificationAlerts: 0 },
+      districtPerformance: emptyOverview,
+      supportOverview: { openChats: 0, assignedChats: 0, resolvedChats: 0, escalatedChats: 0 },
+      governanceStatus: { activeVotes: 0, draftVotes: 0, publishedVotes: 0, shareholderAnnouncements: 0 },
+    }),
+    getDistrictCommandCenter: vi.fn().mockResolvedValue({
+      branchList: [],
+      branchRanking: [],
+      loanApprovalsPerBranch: [],
+      kycCompletion: { completed: 0, pendingReview: 0, needsAction: 0, completionRate: 0 },
+      supportMetrics: { openChats: 0, assignedChats: 0, resolvedChats: 0, escalatedChats: 0 },
+    }),
+    getBranchCommandCenter: vi.fn().mockResolvedValue({
+      employeePerformance: emptyOverview,
+      loansHandled: 0,
+      kycCompleted: 0,
+      supportHandled: 0,
+      pendingTasks: 0,
+    }),
   },
   votingApi: {
     getVotes: vi.fn().mockResolvedValue([]),
@@ -179,8 +272,25 @@ const appClient = {
     getLogs: vi.fn().mockResolvedValue([]),
     getInsuranceAlerts: vi.fn().mockResolvedValue([]),
   },
+  recommendationApi: {
+    getDashboardSummary: vi.fn().mockResolvedValue({
+      recommendationsGeneratedToday: 12,
+      topRecommendationType: 'customer_followup',
+      completionRate: 35,
+      dismissedRate: 8,
+      highOpportunityCustomers: 6,
+      customersMissingKyc: 2,
+      customersSuitableForAutopay: 4,
+    }),
+    getCustomerRecommendations: vi.fn().mockResolvedValue({
+      title: 'Smart Recommendations',
+      recommendations: [],
+    }),
+    generateForCustomer: vi.fn().mockResolvedValue(undefined),
+  },
   auditApi: {
     getByEntity: vi.fn().mockResolvedValue([]),
+    getEntityAuditTrail: vi.fn().mockResolvedValue([]),
     getByActor: vi.fn().mockResolvedValue([]),
   },
   supportApi: {
@@ -210,12 +320,12 @@ describe('DashboardShell', () => {
     };
 
     renderWithClient(session);
-    fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
 
-    expect(screen.getByText('Branch Manager Console')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /members/i })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /voting & governance/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /district analytics/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Branch Command Center' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /employee performance/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^support/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /governance/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /district analytics/i })).not.toBeInTheDocument();
   });
 
   it('shows district console without governance controls for district manager', () => {
@@ -223,50 +333,68 @@ describe('DashboardShell', () => {
       userId: 'district_1',
       fullName: 'Mulugeta Tadesse',
       role: AdminRole.DISTRICT_MANAGER,
-      branchName: 'Gondar District',
+      districtName: 'Bahir Dar District',
     };
 
     renderWithClient(session);
-    fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
 
-    expect(screen.getByText('District Manager Console')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /branch overview/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /district performance/i })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /voting & governance/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'District Command Center' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /branch performance/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^support/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /district analytics/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /governance/i })).not.toBeInTheDocument();
   });
 
-  it('shows governance and audit for head office manager', () => {
+  it('shows the simplified head office command-center rail', () => {
     const session: AdminSession = {
       userId: 'head_1',
-      fullName: 'Selamawit Assefa',
-      role: AdminRole.HEAD_OFFICE_MANAGER,
+      fullName: 'Lulit Mekonnen',
+      role: AdminRole.HEAD_OFFICE_DIRECTOR,
       branchName: 'Head Office',
     };
 
     renderWithClient(session);
-    fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
 
-    expect(screen.getByText('Head Office Manager Console')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /voting & governance/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /audit & reports/i })).toBeInTheDocument();
-    expect(screen.getAllByText('Selamawit Assefa')).toHaveLength(1);
-    expect(screen.getByText('Signed In')).toBeInTheDocument();
-    expect(screen.getByText('Institution-wide view')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Head Office Command Center' })).toBeInTheDocument();
+    expect(screen.getByText('Governance')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reports/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /risk & alerts/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /audit logs/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Lulit Mekonnen')).toHaveLength(1);
+    expect(screen.getByText('Head Office Director')).toBeInTheDocument();
+    expect(screen.getByText('Institution-wide operations')).toBeInTheDocument();
   });
 
   it('renders the governance page only when head office selects it', () => {
     const session: AdminSession = {
       userId: 'head_1',
-      fullName: 'Selamawit Assefa',
-      role: AdminRole.HEAD_OFFICE_MANAGER,
+      fullName: 'Lulit Mekonnen',
+      role: AdminRole.HEAD_OFFICE_DIRECTOR,
       branchName: 'Head Office',
     };
 
     renderWithClient(session);
-    fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /voting & governance/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^governance/i }));
 
-    expect(screen.getByText('Voting Management')).toBeInTheDocument();
+    expect(screen.getAllByText('Governance').length).toBeGreaterThan(0);
+  });
+
+  it('lets head office switch district ranking to transactions handled', async () => {
+    const session: AdminSession = {
+      userId: 'head_1',
+      fullName: 'Lulit Mekonnen',
+      role: AdminRole.HEAD_OFFICE_DIRECTOR,
+      branchName: 'Head Office',
+    };
+
+    renderWithClient(session);
+
+    const transactionsTab = await screen.findByRole('tab', { name: 'Transactions' });
+    fireEvent.click(transactionsTab);
+
+    expect(screen.getByRole('tab', { name: 'Transactions', selected: true })).toBeInTheDocument();
+    expect(screen.getByText('Transactions handled')).toBeInTheDocument();
+    expect(screen.getByText('5,980')).toBeInTheDocument();
   });
 });
 

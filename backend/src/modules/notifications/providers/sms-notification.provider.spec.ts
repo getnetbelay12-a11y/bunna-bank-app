@@ -14,7 +14,7 @@ describe('SmsNotificationProvider', () => {
         sms: {
           enabled: true,
           provider: 'log',
-          senderId: 'CBE_BANK',
+          senderId: 'BUNNA_BANK',
           endpoint: '',
           apiKey: '',
         },
@@ -45,7 +45,7 @@ describe('SmsNotificationProvider', () => {
         sms: {
           enabled: true,
           provider: 'generic_http',
-          senderId: 'CBE_BANK',
+          senderId: 'BUNNA_BANK',
           endpoint: 'https://sms.example.test/send',
           apiKey: 'sms-key',
         },

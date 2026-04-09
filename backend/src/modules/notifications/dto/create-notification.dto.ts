@@ -1,6 +1,11 @@
-import { IsEnum, IsIn, IsMongoId, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsIn, IsMongoId, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
-import { NotificationStatus, NotificationType, UserRole } from '../../../common/enums';
+import {
+  NotificationChannel,
+  NotificationStatus,
+  NotificationType,
+  UserRole,
+} from '../../../common/enums';
 
 export class CreateNotificationDto {
   @IsIn(['member', 'staff'])
@@ -15,6 +20,10 @@ export class CreateNotificationDto {
 
   @IsEnum(NotificationType)
   type!: NotificationType;
+
+  @IsOptional()
+  @IsEnum(NotificationChannel)
+  channel?: NotificationChannel;
 
   @IsOptional()
   @IsEnum(NotificationStatus)
@@ -35,4 +44,23 @@ export class CreateNotificationDto {
   @IsOptional()
   @IsMongoId()
   entityId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  actionLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  priority?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  deepLink?: string;
+
+  @IsOptional()
+  @IsObject()
+  dataPayload?: Record<string, unknown>;
 }

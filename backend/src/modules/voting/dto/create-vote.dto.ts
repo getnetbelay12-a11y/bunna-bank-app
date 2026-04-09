@@ -1,4 +1,29 @@
-import { IsDateString, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+
+export class CreateVoteOptionInputDto {
+  @IsString()
+  @MaxLength(150)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  displayOrder?: number;
+}
 
 export class CreateVoteDto {
   @IsString()
@@ -18,4 +43,10 @@ export class CreateVoteDto {
 
   @IsDateString()
   endDate!: string;
+
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => CreateVoteOptionInputDto)
+  options!: CreateVoteOptionInputDto[];
 }

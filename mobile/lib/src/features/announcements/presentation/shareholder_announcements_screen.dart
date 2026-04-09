@@ -1,78 +1,87 @@
 import 'package:flutter/material.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
+import '../../../../theme/amhara_brand_theme.dart';
+import '../../../app/app_scope.dart';
+import '../../../core/models/index.dart';
+import 'shareholder_announcement_detail_screen.dart';
 
 class ShareholderAnnouncementsScreen extends StatelessWidget {
   const ShareholderAnnouncementsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const announcements = [
-      (
-        title: 'AGM Notice',
-        message: 'Annual general meeting notice for shareholder members.',
-        label: 'Announcement',
-      ),
-      (
-        title: 'Dividend Update',
-        message: 'Dividend communication and payout preparation guidance.',
-        label: 'Shareholder',
-      ),
-    ];
+    final services = AppScope.of(context).services;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: const BackButton(),
-        title: const Text('Shareholder Services'),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5FF),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFB9DBFF)),
-              ),
-              child: const Text(
-                'Active voting and announcements appear here only for eligible shareholder members.',
-              ),
-            ),
-            const SizedBox(height: 16),
-            for (final item in announcements)
-              Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.campaign_rounded,
-                    color: cbeBlue,
+    return FutureBuilder<List<AppNotification>>(
+      future: services.notificationApi.fetchMyNotifications(),
+      builder: (context, snapshot) {
+        final announcements = (snapshot.data ?? const <AppNotification>[])
+            .where(
+              (item) =>
+                  item.type == 'announcement' ||
+                  item.type == 'shareholder_vote' ||
+                  item.type == 'campaign',
+            )
+            .toList();
+
+        return Scaffold(
+          appBar: AppBar(
+            leading: const BackButton(),
+            title: const Text('Shareholder Announcements'),
+          ),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5FF),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFB9DBFF)),
                   ),
-                  title: Text(item.title),
-                  subtitle: Text(item.message),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD9EEFF),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      item.label,
-                      style: const TextStyle(
-                        color: cbeBlue,
-                        fontWeight: FontWeight.w700,
+                  child: const Text(
+                    'Recent governance announcements, AGM notices, and shareholder campaign messages appear here for eligible members.',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (announcements.isEmpty)
+                  const Card(
+                    child: ListTile(
+                      title: Text('No recent shareholder announcements'),
+                      subtitle: Text(
+                        'Announcements will appear here when governance communications are published.',
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
-      ),
+                for (final item in announcements)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.campaign_rounded,
+                        color: abayPrimary,
+                      ),
+                      title: Text(item.title),
+                      subtitle: Text(item.message),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                ShareholderAnnouncementDetailScreen(
+                              notification: item,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

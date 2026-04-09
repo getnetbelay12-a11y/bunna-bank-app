@@ -25,6 +25,11 @@ describe('ShareholdersService', () => {
     };
     const shareholder = {
       _id: currentUser.sub,
+      memberNumber: 'BUN-100001',
+      fullName: 'Abebe Kebede',
+      phone: '0911000001',
+      branchId: 'branch_1',
+      districtId: 'district_1',
       memberType: MemberType.SHAREHOLDER,
       role: UserRole.SHAREHOLDER_MEMBER,
       shareBalance: 5000,
@@ -37,9 +42,11 @@ describe('ShareholdersService', () => {
       }),
     });
 
-    await expect(service.getMyShareholderProfile(currentUser)).resolves.toEqual(
-      shareholder,
-    );
+    await expect(service.getMyShareholderProfile(currentUser)).resolves.toEqual({
+      ...shareholder,
+      shareholderId: 'BUN-100001',
+      shares: 5000,
+    });
   });
 
   it('builds positive voting eligibility for an active shareholder', async () => {

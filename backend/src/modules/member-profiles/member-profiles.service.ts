@@ -22,6 +22,7 @@ export class MemberProfilesService {
     consentAccepted: boolean;
     membershipStatus?: string;
     identityVerificationStatus?: string;
+    onboardingReviewStatus?: string;
   }) {
     return this.memberProfileModel.create({
       memberId: new Types.ObjectId(dto.memberId),
@@ -31,6 +32,7 @@ export class MemberProfilesService {
       consentAccepted: dto.consentAccepted,
       membershipStatus: dto.membershipStatus ?? 'pending_verification',
       identityVerificationStatus: dto.identityVerificationStatus ?? 'not_started',
+      onboardingReviewStatus: dto.onboardingReviewStatus ?? 'submitted',
     });
   }
 
@@ -45,6 +47,10 @@ export class MemberProfilesService {
     input: {
       membershipStatus?: string;
       identityVerificationStatus?: string;
+      onboardingReviewStatus?: string;
+      onboardingReviewNote?: string;
+      onboardingReviewedBy?: string;
+      onboardingLastReviewedAt?: Date;
     },
   ) {
     return this.memberProfileModel.findOneAndUpdate(

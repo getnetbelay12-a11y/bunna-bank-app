@@ -1,7 +1,8 @@
-import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 
 import {
+  NotificationChannel,
   NotificationStatus,
   NotificationType,
   UserRole,
@@ -18,8 +19,6 @@ describe('NotificationsService', () => {
   let service: NotificationsService;
 
   beforeEach(() => {
-    jest.restoreAllMocks();
-    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     notificationModel = {
       create: jest.fn(),
       find: jest.fn(),
@@ -34,15 +33,24 @@ describe('NotificationsService', () => {
 
   it('creates a notification and persists provider delivery status', async () => {
     const notificationId = new Types.ObjectId();
-    provider.dispatch.mockResolvedValue(true);
+    provider.dispatch.mockResolvedValue({
+      channel: NotificationChannel.MOBILE_PUSH,
+      status: NotificationStatus.SENT,
+      deliveredAt: new Date('2026-03-12T10:10:00.000Z'),
+      category: 'payment',
+    });
     notificationModel.create.mockResolvedValue({
       _id: notificationId,
       userType: 'member',
       userId: new Types.ObjectId(),
       type: NotificationType.PAYMENT,
+      channel: NotificationChannel.MOBILE_PUSH,
       status: NotificationStatus.SENT,
       title: 'Payment complete',
       message: 'Done',
+      actionLabel: 'Open payment',
+      priority: 'normal',
+      deepLink: '/payments/receipt_1',
     });
 
     const result = await service.createNotification({
@@ -51,13 +59,25 @@ describe('NotificationsService', () => {
       type: NotificationType.PAYMENT,
       title: 'Payment complete',
       message: 'Done',
+      actionLabel: 'Open payment',
+      priority: 'normal',
+      deepLink: '/payments/receipt_1',
     });
 
     expect(provider.dispatch).toHaveBeenCalled();
     expect(notificationModel.create).toHaveBeenCalledWith(
-      expect.objectContaining({ status: NotificationStatus.SENT }),
+      expect.objectContaining({
+        status: NotificationStatus.SENT,
+        channel: NotificationChannel.MOBILE_PUSH,
+        actionLabel: 'Open payment',
+        priority: 'normal',
+        deepLink: '/payments/receipt_1',
+        deliveredAt: new Date('2026-03-12T10:10:00.000Z'),
+      }),
     );
     expect(result.status).toBe(NotificationStatus.SENT);
+    expect(result.channel).toBe(NotificationChannel.MOBILE_PUSH);
+    expect(result.actionLabel).toBe('Open payment');
   });
 
   it('persists a failed notification when provider dispatch throws', async () => {
@@ -67,6 +87,7 @@ describe('NotificationsService', () => {
       userType: 'member',
       userId: new Types.ObjectId(),
       type: NotificationType.SYSTEM,
+      channel: NotificationChannel.MOBILE_PUSH,
       status: NotificationStatus.FAILED,
       title: 'System',
       message: 'Unavailable',
@@ -81,7 +102,10 @@ describe('NotificationsService', () => {
     });
 
     expect(notificationModel.create).toHaveBeenCalledWith(
-      expect.objectContaining({ status: NotificationStatus.FAILED }),
+      expect.objectContaining({
+        channel: NotificationChannel.MOBILE_PUSH,
+        status: NotificationStatus.FAILED,
+      }),
     );
     expect(result.status).toBe(NotificationStatus.FAILED);
   });
@@ -96,6 +120,7 @@ describe('NotificationsService', () => {
             userType: 'member',
             userId,
             type: NotificationType.LOAN_STATUS,
+            channel: NotificationChannel.MOBILE_PUSH,
             status: NotificationStatus.SENT,
             title: 'Loan',
             message: 'Updated',
@@ -124,6 +149,7 @@ describe('NotificationsService', () => {
       userType: 'member',
       userId,
       type: NotificationType.SYSTEM,
+      channel: NotificationChannel.MOBILE_PUSH,
       status: NotificationStatus.SENT,
       title: 'Notice',
       message: 'Read me',
@@ -144,6 +170,7 @@ describe('NotificationsService', () => {
       _id: new Types.ObjectId(),
       userType: 'member',
       userId: new Types.ObjectId(),
+      channel: NotificationChannel.MOBILE_PUSH,
       status: NotificationStatus.SENT,
       save: jest.fn(),
     });

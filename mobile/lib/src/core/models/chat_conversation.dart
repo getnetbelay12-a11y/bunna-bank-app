@@ -11,11 +11,16 @@ class ChatConversation {
     required this.createdAt,
     required this.updatedAt,
     required this.escalationFlag,
+    required this.priority,
+    this.loanId,
+    this.routingLevel,
     this.branchName,
     this.assignedToStaffName,
     this.assignedAgentId,
     this.latestMessage,
     this.messages = const [],
+    this.responseDueAt,
+    this.slaState,
   });
 
   final String id;
@@ -27,9 +32,14 @@ class ChatConversation {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool escalationFlag;
+  final String priority;
+  final String? loanId;
+  final String? routingLevel;
   final String? branchName;
   final String? assignedToStaffName;
   final String? assignedAgentId;
   final ChatMessage? latestMessage;
   final List<ChatMessage> messages;
+  final DateTime? responseDueAt;
+  final String? slaState;
 }

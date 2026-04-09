@@ -2,7 +2,7 @@
 
 ## Home Structure Preserved
 
-The Home page keeps the familiar CBE Bank structure:
+The Home page keeps the familiar Bunna Bank structure:
 
 - welcome header
 - balance card
@@ -59,4 +59,4 @@ Light blue is used only for presentation/demo emphasis on new features:
 - reminder strips
 - feature highlight borders
 
-The main CBE Bank branding remains dark blue, yellow, and white.
+The main Bunna Bank branding remains dark blue, yellow, and white.

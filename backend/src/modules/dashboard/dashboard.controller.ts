@@ -1,10 +1,14 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 
 import { CurrentUser, Roles } from '../../common/decorators';
 import { UserRole } from '../../common/enums';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { AuthenticatedUser } from '../auth/interfaces';
-import { DashboardPeriodQueryDto } from './dto';
+import {
+  DashboardPeriodQueryDto,
+  UpdateAutopayOperationDto,
+  UpdateOnboardingReviewDto,
+} from './dto';
 import { DashboardService } from './dashboard.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -55,5 +59,33 @@ export class DashboardController {
   @Get('voting-summary')
   getVotingSummary(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.dashboardService.getVotingSummary(currentUser);
+  }
+
+  @Get('onboarding-review')
+  getOnboardingReviewQueue(@CurrentUser() currentUser: AuthenticatedUser) {
+    return this.dashboardService.getOnboardingReviewQueue(currentUser);
+  }
+
+  @Get('autopay-operations')
+  getAutopayOperations(@CurrentUser() currentUser: AuthenticatedUser) {
+    return this.dashboardService.getAutopayOperations(currentUser);
+  }
+
+  @Patch('autopay-operations/:id')
+  updateAutopayOperation(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateAutopayOperationDto,
+  ) {
+    return this.dashboardService.updateAutopayOperation(currentUser, id, dto);
+  }
+
+  @Patch('onboarding-review/:memberId')
+  updateOnboardingReview(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateOnboardingReviewDto,
+  ) {
+    return this.dashboardService.updateOnboardingReview(currentUser, memberId, dto);
   }
 }

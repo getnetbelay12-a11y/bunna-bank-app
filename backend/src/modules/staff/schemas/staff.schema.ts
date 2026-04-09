@@ -25,6 +25,7 @@ export class Staff {
   @Prop({
     required: true,
     enum: [
+      UserRole.SCHOOL_ADMIN,
       UserRole.SUPPORT_AGENT,
       UserRole.LOAN_OFFICER,
       UserRole.BRANCH_MANAGER,
@@ -43,6 +44,9 @@ export class Staff {
 
   @Prop({ type: Types.ObjectId, ref: 'District', index: true })
   districtId?: Types.ObjectId;
+
+  @Prop({ type: [String], default: [] })
+  permissions!: string[];
 
   @Prop({ required: true })
   passwordHash!: string;

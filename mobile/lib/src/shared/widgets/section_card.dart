@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../theme/cbe_bank_theme.dart';
+import '../../../theme/amhara_brand_theme.dart';
 
 class SectionCard extends StatelessWidget {
   const SectionCard({
@@ -22,7 +22,7 @@ class SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14000000),
+            color: abayShadow,
             blurRadius: 10,
             offset: Offset(0, 6),
           ),
@@ -35,7 +35,7 @@ class SectionCard extends StatelessWidget {
             title,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: cbeBlue,
+              color: abayPrimary,
             ),
           ),
           const SizedBox(height: 16),

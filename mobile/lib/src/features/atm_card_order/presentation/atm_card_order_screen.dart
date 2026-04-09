@@ -1,15 +1,11 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
+import '../../../../theme/amhara_brand_theme.dart';
 import '../../../app/app_scope.dart';
-import '../../../core/services/api_config.dart';
+import '../../../shared/widgets/upload_selector_card.dart';
 
 class AtmCardOrderScreen extends StatefulWidget {
   const AtmCardOrderScreen({super.key});
@@ -23,7 +19,7 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _regionController = TextEditingController(text: 'Amhara');
+  final _regionController = TextEditingController(text: 'Bunna');
   final _cityController = TextEditingController(text: 'Bahir Dar');
   final _branchController = TextEditingController(text: 'Bahir Dar Branch');
   final _pinController = TextEditingController();
@@ -81,13 +77,13 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
                       Text(
                         'Selfie Verification Required',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: cbeBlue,
+                              color: abayPrimary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'ATM card requests require Fayda front/back review, PIN setup, branch review, and selfie verification before production.',
+                        'ATM card requests require verified identity, unlocked account access, matched profile details, PIN setup, branch review, and selfie verification before production.',
                       ),
                     ],
                   ),
@@ -109,12 +105,15 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
                 const SizedBox(height: 12),
                 _buildField(_branchController, 'Preferred Branch'),
                 const SizedBox(height: 12),
-                _UploadCard(
+                UploadSelectorCard(
                   title: 'Fayda Front ID Upload',
                   actionLabel: _faydaFrontUpload == null
                       ? 'Upload Front ID'
                       : 'Replace Front ID',
-                  upload: _faydaFrontUpload,
+                  selectedName: _faydaFrontUpload?.name,
+                  selectedPath: _faydaFrontUpload?.path,
+                  selectedKind: _faydaFrontUpload?.kind,
+                  selectionCaption: 'Selected successfully',
                   onTap: () => _selectDocumentUpload(
                     title: 'Fayda Front ID Upload',
                     onSelected: (value) {
@@ -128,11 +127,14 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
                       : null,
                 ),
                 const SizedBox(height: 12),
-                _UploadCard(
+                UploadSelectorCard(
                   title: 'Fayda Back ID Upload',
                   actionLabel:
                       _faydaBackUpload == null ? 'Upload Back ID' : 'Replace Back ID',
-                  upload: _faydaBackUpload,
+                  selectedName: _faydaBackUpload?.name,
+                  selectedPath: _faydaBackUpload?.path,
+                  selectedKind: _faydaBackUpload?.kind,
+                  selectionCaption: 'Selected successfully',
                   onTap: () => _selectDocumentUpload(
                     title: 'Fayda Back ID Upload',
                     onSelected: (value) {
@@ -146,11 +148,14 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
                       : null,
                 ),
                 const SizedBox(height: 12),
-                _UploadCard(
+                UploadSelectorCard(
                   title: 'Selfie Verification',
                   actionLabel:
                       _selfieUpload == null ? 'Take Selfie' : 'Retake Selfie',
-                  upload: _selfieUpload,
+                  selectedName: _selfieUpload?.name,
+                  selectedPath: _selfieUpload?.path,
+                  selectedKind: _selfieUpload?.kind,
+                  selectionCaption: 'Selected successfully',
                   onTap: () => _selectSelfieUpload(
                     onSelected: (value) {
                       setState(() {
@@ -168,6 +173,8 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
                   'Choose PIN',
                   keyboardType: TextInputType.number,
                   obscureText: true,
+                  helperText:
+                      'Use a strong 4-digit PIN. Avoid 1234, 4321, or repeated digits.',
                 ),
                 if (_message != null) ...[
                   const SizedBox(height: 16),
@@ -198,14 +205,30 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
     String label, {
     TextInputType? keyboardType,
     bool obscureText = false,
+    String? helperText,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
-      decoration: InputDecoration(labelText: label),
-      validator: (value) =>
-          value == null || value.trim().isEmpty ? '$label is required.' : null,
+      decoration: InputDecoration(labelText: label, helperText: helperText),
+      validator: (value) {
+        final trimmed = value?.trim() ?? '';
+        if (trimmed.isEmpty) {
+          return '$label is required.';
+        }
+        if (label == 'Choose PIN') {
+          if (!RegExp(r'^\d{4}$').hasMatch(trimmed)) {
+            return 'PIN must be exactly 4 digits.';
+          }
+          if (RegExp(r'^(\d)\1{3}$').hasMatch(trimmed) ||
+              trimmed == '1234' ||
+              trimmed == '4321') {
+            return 'Choose a stronger PIN.';
+          }
+        }
+        return null;
+      },
     );
   }
 
@@ -222,60 +245,74 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
       return;
     }
 
-    if (!ApiConfig.hasBaseUrl) {
-      setState(() {
-        _message = 'API_BASE_URL is not configured. ATM request was not sent.';
-      });
-      return;
-    }
-
     setState(() {
       _submitting = true;
       _message = null;
     });
+    final services = AppScope.of(context).services;
+    try {
+      final frontUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _faydaFrontUpload!.path,
+        originalFileName: _faydaFrontUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'fayda_front',
+      );
+      final backUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _faydaBackUpload!.path,
+        originalFileName: _faydaBackUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'fayda_back',
+      );
+      final selfieUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _selfieUpload!.path,
+        originalFileName: _selfieUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'selfie',
+      );
+      final created = await services.serviceRequestApi.createRequest(
+        type: 'atm_card_request',
+        title: 'ATM card request',
+        description:
+            'Request for ATM card issuance with branch selection and identity verification.',
+        payload: {
+          'firstName': _firstNameController.text.trim(),
+          'lastName': _lastNameController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'region': _regionController.text.trim(),
+          'city': _cityController.text.trim(),
+          'preferredBranch': _branchController.text.trim(),
+          'faydaFrontImage': frontUpload.storageKey,
+          'faydaBackImage': backUpload.storageKey,
+          'selfieImage': selfieUpload.storageKey,
+          'pin': _pinController.text.trim(),
+        },
+        attachments: [
+          frontUpload.storageKey,
+          backUpload.storageKey,
+          selfieUpload.storageKey,
+        ],
+      );
 
-    final token = AppScope.of(context).services.sessionStore.accessToken;
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/atm-card/request'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'firstName': _firstNameController.text.trim(),
-        'lastName': _lastNameController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-        'region': _regionController.text.trim(),
-        'city': _cityController.text.trim(),
-        'preferredBranch': _branchController.text.trim(),
-        'faydaFrontImage': _faydaFrontUpload!.path,
-        'faydaBackImage': _faydaBackUpload!.path,
-        'selfieImage': _selfieUpload!.path,
-        'pin': _pinController.text.trim(),
-      }),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _submitting = false;
         _message =
-            'ATM card request submitted successfully. Request ID: ${data['requestId'] ?? 'pending'}';
+            'ATM card request submitted. Request ID: ${created.id} · Status: ${created.status}';
       });
-      return;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _submitting = false;
+        _message = error.toString().replaceFirst('Exception: ', '');
+      });
     }
-
-    setState(() {
-      _submitting = false;
-      _message = _extractErrorMessage(
-        response.body,
-        fallback: 'Unable to submit ATM card request.',
-      );
-    });
   }
 
   Future<void> _selectDocumentUpload({
@@ -425,152 +462,6 @@ class _AtmCardOrderScreenState extends State<AtmCardOrderScreen> {
       name: file.name,
       path: file.path ?? file.name,
       kind: 'file',
-    );
-  }
-
-  String _extractErrorMessage(String body, {required String fallback}) {
-    try {
-      final data = jsonDecode(body);
-      if (data is Map<String, dynamic>) {
-        final message = data['message'];
-        if (message is String && message.trim().isNotEmpty) {
-          return message;
-        }
-      }
-    } catch (_) {
-      // Ignore.
-    }
-    return fallback;
-  }
-}
-
-class _UploadCard extends StatelessWidget {
-  const _UploadCard({
-    required this.title,
-    required this.actionLabel,
-    required this.onTap,
-    required this.validator,
-    this.upload,
-  });
-
-  final String title;
-  final String actionLabel;
-  final VoidCallback onTap;
-  final String? Function() validator;
-  final _SelectedUpload? upload;
-
-  @override
-  Widget build(BuildContext context) {
-    return FormField<String>(
-      validator: (_) => validator(),
-      builder: (field) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Ink(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: field.hasError
-                      ? Theme.of(context).colorScheme.error
-                      : const Color(0xFFD8E3F5),
-                ),
-              ),
-              child: Row(
-                children: [
-                  _UploadPreview(upload: upload),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style:
-                              Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          upload == null
-                              ? actionLabel
-                              : '${upload!.name}\nSelected successfully',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: const Color(0xFF475569),
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right_rounded),
-                ],
-              ),
-            ),
-          ),
-          if (field.hasError) ...[
-            const SizedBox(height: 6),
-            Text(
-              field.errorText!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _UploadPreview extends StatelessWidget {
-  const _UploadPreview({required this.upload});
-
-  final _SelectedUpload? upload;
-
-  @override
-  Widget build(BuildContext context) {
-    if (upload == null) {
-      return Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(Icons.upload_file_rounded),
-      );
-    }
-
-    final file = File(upload!.path);
-    final isImage = upload!.kind == 'image' && file.existsSync();
-
-    if (isImage) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.file(
-          file,
-          width: 56,
-          height: 56,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
-
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Icon(Icons.insert_drive_file_rounded),
     );
   }
 }

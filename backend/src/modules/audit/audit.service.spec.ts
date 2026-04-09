@@ -33,6 +33,44 @@ describe('AuditService', () => {
     expect(result.id).toBe(id.toString());
   });
 
+  it('wraps actor action logging through the common audit path', async () => {
+    const actorId = new Types.ObjectId();
+    const entityId = new Types.ObjectId();
+    const model = {
+      create: jest.fn().mockResolvedValue({
+        _id: new Types.ObjectId(),
+        actorId,
+        actorRole: UserRole.BRANCH_MANAGER,
+        actionType: 'loan_submitted',
+        entityType: 'loan',
+        entityId,
+        before: null,
+        after: { status: 'submitted' },
+      }),
+    };
+
+    const service = new AuditService(model as never);
+
+    await service.logActorAction({
+      actorId: actorId.toString(),
+      actorRole: UserRole.BRANCH_MANAGER,
+      actionType: 'loan_submitted',
+      entityType: 'loan',
+      entityId: entityId.toString(),
+      after: { status: 'submitted' },
+    });
+
+    expect(model.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId,
+        actorRole: UserRole.BRANCH_MANAGER,
+        actionType: 'loan_submitted',
+        entityType: 'loan',
+        entityId,
+      }),
+    );
+  });
+
   it('lists audit logs by query filter', async () => {
     const actorId = new Types.ObjectId();
     const entityId = new Types.ObjectId();

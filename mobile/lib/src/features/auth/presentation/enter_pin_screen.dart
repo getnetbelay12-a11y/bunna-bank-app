@@ -36,7 +36,10 @@ class _EnterPinScreenState extends State<EnterPinScreen> {
     final isAmharic = controller.language == AppLanguage.amharic;
 
     return Scaffold(
-      appBar: AppBar(title: Text(isAmharic ? 'ፒን አስገባ' : 'Enter PIN')),
+      appBar: AppBar(
+        leading: const BackButton(),
+        title: Text(isAmharic ? 'ፒን አስገባ' : 'Enter PIN'),
+      ),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -64,6 +67,15 @@ class _EnterPinScreenState extends State<EnterPinScreen> {
                       : 'Enter the PIN linked to ${widget.identifier}.',
                 ),
                 const SizedBox(height: 20),
+                if (controller.authError != null) ...[
+                  Text(
+                    controller.authError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TextFormField(
                   controller: _pinController,
                   keyboardType: TextInputType.number,
@@ -116,7 +128,19 @@ class _EnterPinScreenState extends State<EnterPinScreen> {
                           return;
                         }
                         navigator.popUntil((route) => route.isFirst);
-                      } catch (_) {}
+                      } catch (_) {
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              controller.authError ??
+                                  'PIN verification failed. Try again.',
+                            ),
+                          ),
+                        );
+                      }
                     },
                     child: Text(isAmharic ? 'ግባ' : 'Sign In'),
                   ),

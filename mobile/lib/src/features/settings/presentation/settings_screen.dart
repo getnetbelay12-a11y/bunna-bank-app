@@ -1,10 +1,10 @@
-import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
+import '../../../../theme/amhara_brand_theme.dart';
 import '../../../app/app_scope.dart';
-import '../../../core/services/api_config.dart';
+import '../../../core/models/index.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,213 +14,470 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _accountLockEnabled = false;
-  bool _loading = true;
-  bool _saving = false;
-  String? _message;
+  Future<SecurityOverview>? _overviewFuture;
+  bool _savingLock = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_loading) {
-      _loadAccountLock();
-    }
+    _overviewFuture ??= _loadOverview();
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
+    final biometricLabel = Platform.isIOS ? 'Face ID Login' : 'Biometric Login';
 
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
-        title: const Text('Security Settings'),
+        title: const Text('Security Center'),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text(
-              'Manage app access, account lock, biometric sign in, and secure session preferences.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: const Color(0xFF64748B),
+        child: FutureBuilder<SecurityOverview>(
+          future: _overviewFuture,
+          builder: (context, snapshot) {
+            final overview = snapshot.data;
+            return RefreshIndicator(
+              onRefresh: () async {
+                final next = _loadOverview();
+                setState(() {
+                  _overviewFuture = next;
+                });
+                await next;
+              },
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Text(
+                    'Protect access, review trusted devices, and control high-risk banking actions from one place.',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: abayTextSoft,
+                        ),
                   ),
-            ),
-            const SizedBox(height: 20),
-            if (_message != null) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5FF),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFB9DBFF)),
-                ),
-                child: Text(_message!),
+                  const SizedBox(height: 20),
+                  _SummaryCard(
+                    title: 'Security posture',
+                    items: [
+                      _SummaryItem(
+                        label: 'Account lock',
+                        value: overview?.accountLockEnabled == true
+                            ? 'Enabled'
+                            : 'Disabled',
+                      ),
+                      _SummaryItem(
+                        label: 'Current sessions',
+                        value: '${overview?.sessions.length ?? 0}',
+                      ),
+                      _SummaryItem(
+                        label: 'Trusted devices',
+                        value: '${overview?.devices.length ?? 0}',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: SwitchListTile(
+                      value: overview?.accountLockEnabled ?? false,
+                      title: const Text('Account Lock'),
+                      subtitle: Text(
+                        _savingLock
+                            ? 'Saving security preference...'
+                            : 'Block high-risk actions until the account is explicitly unlocked again.',
+                      ),
+                      onChanged: _savingLock || overview == null
+                          ? null
+                          : (value) => _updateAccountLock(value),
+                    ),
+                  ),
+                  Card(
+                    child: SwitchListTile(
+                      value: controller.biometricEnabled,
+                      title: Text(biometricLabel),
+                      subtitle: Text(
+                        Platform.isIOS
+                            ? 'Use Face ID for faster, secure sign in on this device.'
+                            : 'Use biometric authentication for faster, secure sign in.',
+                      ),
+                      onChanged: controller.toggleBiometric,
+                    ),
+                  ),
+                  Card(
+                    child: SwitchListTile(
+                      value: controller.pinEnabled,
+                      title: const Text('PIN Login'),
+                      subtitle: const Text(
+                        'Keep PIN sign in enabled for daily banking access.',
+                      ),
+                      onChanged: controller.togglePin,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'High-Risk Action Verification',
+                    child: Text(
+                      overview?.highRiskActionVerification == true
+                          ? 'Enabled for payments, governance voting, card controls, and sensitive profile changes.'
+                          : 'High-risk action verification is unavailable right now.',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'Active Sessions',
+                    child: overview == null
+                        ? const _LoadingBlock()
+                        : Column(
+                            children: [
+                              for (final session in overview.sessions) ...[
+                                _SessionTile(
+                                  session: session,
+                                  onRevoke: session.isCurrent
+                                      ? null
+                                      : () => _revokeSession(session.challengeId),
+                                ),
+                                if (session != overview.sessions.last)
+                                  const SizedBox(height: 12),
+                              ],
+                              if (overview.sessions.isEmpty)
+                                const Text(
+                                  'No session history is available yet.',
+                                ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'Trusted Devices',
+                    child: overview == null
+                        ? const _LoadingBlock()
+                        : Column(
+                            children: [
+                              for (final device in overview.devices) ...[
+                                _DeviceTile(device: device),
+                                if (device != overview.devices.last)
+                                  const SizedBox(height: 12),
+                              ],
+                              if (overview.devices.isEmpty)
+                                const Text(
+                                  'No trusted devices are registered yet.',
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-            ],
-            Card(
-              child: SwitchListTile(
-                value: _accountLockEnabled,
-                title: const Text('Account Lock'),
-                subtitle: Text(
-                  _loading
-                      ? 'Loading account lock setting...'
-                      : _saving
-                          ? 'Saving account lock setting...'
-                          : 'Require secure re-entry before sensitive account access.',
-                ),
-                onChanged: (_loading || _saving)
-                    ? null
-                    : (value) => _updateAccountLock(value),
-              ),
-            ),
-            Card(
-              child: SwitchListTile(
-                value: controller.biometricEnabled,
-                title: const Text('Biometric Login'),
-                subtitle: const Text(
-                  'Use fingerprint or face authentication when available.',
-                ),
-                onChanged: controller.toggleBiometric,
-              ),
-            ),
-            Card(
-              child: SwitchListTile(
-                value: controller.pinEnabled,
-                title: const Text('PIN Authentication'),
-                subtitle: const Text(
-                  'Keep PIN sign in enabled for daily secure access.',
-                ),
-                onChanged: controller.togglePin,
-              ),
-            ),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.timer_outlined),
-                title: Text('Session Timeout'),
-                subtitle: Text(
-                  'Sessions expire automatically after inactivity for security.',
-                ),
-              ),
-            ),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.notifications_active_outlined),
-                title: Text('Notification Preferences'),
-                subtitle: Text(
-                  'Loan, KYC, insurance, and support alerts remain enabled.',
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Future<void> _loadAccountLock() async {
-    if (!ApiConfig.hasBaseUrl) {
-      setState(() {
-        _loading = false;
-        _message = 'API_BASE_URL is not configured. Security settings are local only.';
-      });
-      return;
-    }
-
-    final token = AppScope.of(context).services.sessionStore.accessToken;
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/security/account-lock'),
-      headers: _authHeaders(token),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      setState(() {
-        _accountLockEnabled = data['accountLockEnabled'] as bool? ?? false;
-        _loading = false;
-      });
-      return;
-    }
-
-    setState(() {
-      _loading = false;
-      _message = _extractErrorMessage(
-        response.body,
-        fallback: 'Unable to load security settings.',
-      );
-    });
+  Future<SecurityOverview> _loadOverview() {
+    return AppScope.of(context).services.securityApi.fetchOverview();
   }
 
   Future<void> _updateAccountLock(bool enabled) async {
-    if (!ApiConfig.hasBaseUrl) {
-      setState(() {
-        _accountLockEnabled = enabled;
-        _message = 'API_BASE_URL is not configured. Security settings are local only.';
-      });
-      return;
-    }
-
-    final token = AppScope.of(context).services.sessionStore.accessToken;
+    final messenger = ScaffoldMessenger.of(context);
     setState(() {
-      _saving = true;
-      _accountLockEnabled = enabled;
-      _message = null;
+      _savingLock = true;
     });
-
-    final response = await http.patch(
-      Uri.parse('${ApiConfig.baseUrl}/security/account-lock'),
-      headers: _authHeaders(token),
-      body: jsonEncode({'enabled': enabled}),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      setState(() {
-        _saving = false;
-        _message = enabled
-            ? 'Account lock enabled successfully.'
-            : 'Account lock disabled successfully.';
-      });
-      return;
-    }
-
-    setState(() {
-      _saving = false;
-      _accountLockEnabled = !enabled;
-      _message = _extractErrorMessage(
-        response.body,
-        fallback: 'Unable to update account lock.',
-      );
-    });
-  }
-
-  Map<String, String> _authHeaders(String? token) {
-    return {
-      'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-    };
-  }
-
-  String _extractErrorMessage(String body, {required String fallback}) {
     try {
-      final data = jsonDecode(body);
-      if (data is Map<String, dynamic>) {
-        final message = data['message'];
-        if (message is String && message.trim().isNotEmpty) {
-          return message;
-        }
+      final updated =
+          await AppScope.of(context).services.securityApi.updateAccountLock(enabled);
+      if (!mounted) {
+        return;
       }
-    } catch (_) {
-      // Ignore.
+      setState(() {
+        _savingLock = false;
+        _overviewFuture = Future<SecurityOverview>.value(
+          SecurityOverview(
+            accountLockEnabled: updated,
+            highRiskActionVerification: true,
+            sessions: const [],
+            devices: const [],
+          ),
+        );
+        _overviewFuture = _loadOverview();
+      });
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            updated
+                ? 'Account lock enabled. High-risk actions are now protected.'
+                : 'Account lock disabled. High-risk actions are available again.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savingLock = false;
+      });
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
     }
-    return fallback;
   }
+
+  Future<void> _revokeSession(String challengeId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await AppScope.of(context).services.securityApi.revokeSession(challengeId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _overviewFuture = _loadOverview();
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Session revoked successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<_SummaryItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: abayPrimary,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final item in items)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.label,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.value,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryItem {
+  const _SummaryItem({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: abayBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({
+    required this.session,
+    required this.onRevoke,
+  });
+
+  final MemberAuthSession session;
+  final VoidCallback? onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: abaySurfaceAlt,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  session.deviceId ?? session.loginIdentifier,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: session.isCurrent
+                      ? abaySuccess.withValues(alpha: 0.12)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  session.isCurrent ? 'Current' : session.status.toUpperCase(),
+                  style: TextStyle(
+                    color: session.isCurrent ? abaySuccess : abayPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Login ID: ${session.loginIdentifier}'),
+          if (session.updatedAt != null)
+            Text('Last activity: ${_formatDateTime(session.updatedAt!)}'),
+          if (onRevoke != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: onRevoke,
+              child: const Text('Sign Out Session'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeviceTile extends StatelessWidget {
+  const _DeviceTile({required this.device});
+
+  final MemberDevice device;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: abaySurfaceAlt,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  device.deviceId,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (device.isCurrent)
+                const Chip(label: Text('Current device')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Remembered: ${device.rememberDevice ? 'Yes' : 'No'} • Biometric: ${device.biometricEnabled ? 'On' : 'Off'}',
+          ),
+          if (device.lastLoginAt != null)
+            Text('Last login: ${_formatDateTime(device.lastLoginAt!)}'),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingBlock extends StatelessWidget {
+  const _LoadingBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+String _formatDateTime(DateTime value) {
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '${value.year}-$month-$day $hour:$minute';
 }

@@ -2,9 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
+import { UserRole } from '../../../common/enums';
 import { Staff, StaffDocument } from '../../staff/schemas/staff.schema';
+import { deriveStaffPermissions } from '../../staff/staff-permissions';
 import { AuthPrincipal } from '../interfaces';
 import { StaffAuthRepository } from '../auth.types';
+
+const DEMO_SCHOOL_IDENTIFIER = 'admin@bluenileacademy.school';
 
 @Injectable()
 export class MongooseStaffAuthRepository implements StaffAuthRepository {
@@ -15,31 +19,26 @@ export class MongooseStaffAuthRepository implements StaffAuthRepository {
 
   async findByIdentifier(identifier: string): Promise<AuthPrincipal | null> {
     const normalizedIdentifier = identifier.trim().toLowerCase();
-    const aliasTargets = this.resolveDemoAliases(normalizedIdentifier);
-    if (aliasTargets.length > 0) {
-      const aliasedStaff = await this.findFirstMatchingStaff(aliasTargets);
-      if (aliasedStaff) {
-        return aliasedStaff;
-      }
+
+    if (normalizedIdentifier === DEMO_SCHOOL_IDENTIFIER) {
+      return {
+        id: 'school_admin_blue_nile',
+        role: UserRole.SCHOOL_ADMIN,
+        passwordHash: 'demo-pass',
+        identifier: DEMO_SCHOOL_IDENTIFIER,
+        email: DEMO_SCHOOL_IDENTIFIER,
+        fullName: 'Meron Fenta',
+        staffNumber: 'SCH-0001',
+        phone: '0911223344',
+        schoolId: 'school_blue_nile',
+        schoolName: 'Blue Nile Academy',
+        branchName: 'Bahir Dar Branch',
+        permissions: deriveStaffPermissions(UserRole.SCHOOL_ADMIN),
+      };
     }
 
-    const lookupValues = Array.from(new Set([identifier.trim(), normalizedIdentifier]));
-    return this.findFirstMatchingStaff(lookupValues, identifier.trim());
-  }
-
-  private async findFirstMatchingStaff(
-    lookupValues: string[],
-    staffNumber?: string,
-  ): Promise<AuthPrincipal | null> {
     const staff = await this.staffModel
-      .findOne({
-        isActive: true,
-        $or: [
-          { identifier: { $in: lookupValues } },
-          { email: { $in: lookupValues } },
-          ...(staffNumber ? [{ staffNumber }] : []),
-        ],
-      })
+      .findOne({ identifier, isActive: true })
       .populate({ path: 'branchId', select: 'name' })
       .populate({ path: 'districtId', select: 'name' })
       .lean<
@@ -48,10 +47,11 @@ export class MongooseStaffAuthRepository implements StaffAuthRepository {
             role: AuthPrincipal['role'];
             passwordHash: string;
             fullName: string;
+            identifier: string;
+            email?: string;
             staffNumber: string;
             phone: string;
-            identifier?: string;
-            email?: string;
+            permissions?: string[];
             branchId?: { _id?: { toString(): string }; name?: string } | string;
             districtId?: { _id?: { toString(): string }; name?: string } | string;
           } & Record<string, unknown>)
@@ -92,26 +92,16 @@ export class MongooseStaffAuthRepository implements StaffAuthRepository {
       fullName: staff.fullName,
       staffNumber: staff.staffNumber,
       phone: staff.phone,
+      schoolId: undefined,
+      schoolName: undefined,
       branchId: branch.id,
       districtId: district.id,
       branchName: branch.name,
       districtName: district.name,
+      permissions:
+        staff.permissions?.length != null && staff.permissions.length > 0
+          ? staff.permissions
+          : deriveStaffPermissions(staff.role),
     };
-  }
-
-  private resolveDemoAliases(identifier: string): string[] {
-    const headOfficeAliases = new Set([
-      'admin',
-      'head_office',
-      'head-office',
-      'head office',
-      'headoffice',
-    ]);
-
-    if (!headOfficeAliases.has(identifier)) {
-      return [];
-    }
-
-    return ['admin@bunna.local'];
   }
 }

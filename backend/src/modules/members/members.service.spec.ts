@@ -18,7 +18,7 @@ describe('MembersService', () => {
 
   const memberProfile: MemberProfile = {
     id: 'member_1',
-    memberNumber: 'MBR-10001',
+    memberNumber: 'BUN-100001',
     memberType: MemberType.SHAREHOLDER,
     role: UserRole.SHAREHOLDER_MEMBER,
     fullName: 'Abebe Kebede',
@@ -43,10 +43,7 @@ describe('MembersService', () => {
       log: jest.fn(),
     } as unknown as jest.Mocked<AuditService>;
     memberProfilesService = {
-      findByMemberId: jest.fn().mockResolvedValue({
-        membershipStatus: 'pending_verification',
-        identityVerificationStatus: 'not_started',
-      }),
+      findByMemberId: jest.fn(),
     } as unknown as jest.Mocked<MemberProfilesService>;
 
     service = new MembersService(
@@ -58,6 +55,10 @@ describe('MembersService', () => {
 
   it('returns the current member profile for a shareholder member', async () => {
     membersRepository.findById.mockResolvedValue(memberProfile);
+    memberProfilesService.findByMemberId.mockResolvedValue({
+      membershipStatus: 'active',
+      identityVerificationStatus: 'verified',
+    } as never);
 
     const currentUser: AuthenticatedUser = {
       sub: 'member_1',
@@ -67,8 +68,10 @@ describe('MembersService', () => {
 
     await expect(service.getMyProfile(currentUser)).resolves.toEqual({
       ...memberProfile,
-      membershipStatus: 'pending_verification',
-      identityVerificationStatus: 'not_started',
+      membershipStatus: 'active',
+      identityVerificationStatus: 'verified',
+      onboardingReviewStatus: 'submitted',
+      onboardingReviewNote: undefined,
     });
   });
 
@@ -91,6 +94,10 @@ describe('MembersService', () => {
 
     membersRepository.findById.mockResolvedValue(memberProfile);
     membersRepository.updateById.mockResolvedValue(updatedProfile);
+    memberProfilesService.findByMemberId.mockResolvedValue({
+      membershipStatus: 'active',
+      identityVerificationStatus: 'verified',
+    } as never);
 
     const currentUser: AuthenticatedUser = {
       sub: 'member_1',
@@ -102,8 +109,10 @@ describe('MembersService', () => {
       service.updateMyProfile(currentUser, { fullName: 'Abebe K.' }),
     ).resolves.toEqual({
       ...updatedProfile,
-      membershipStatus: 'pending_verification',
-      identityVerificationStatus: 'not_started',
+      membershipStatus: 'active',
+      identityVerificationStatus: 'verified',
+      onboardingReviewStatus: 'submitted',
+      onboardingReviewNote: undefined,
     });
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -145,7 +154,7 @@ describe('MembersService', () => {
       role: UserRole.ADMIN,
     };
     const dto: CreateMemberDto = {
-      memberNumber: 'MBR-10003',
+      memberNumber: 'BUN-100003',
       memberType: MemberType.MEMBER,
       role: UserRole.MEMBER,
       fullName: 'New Member',

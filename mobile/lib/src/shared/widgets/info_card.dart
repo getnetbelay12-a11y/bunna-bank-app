@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../theme/cbe_bank_theme.dart';
+import '../../../theme/amhara_brand_theme.dart';
 
 class InfoCard extends StatelessWidget {
   const InfoCard({
@@ -24,7 +24,7 @@ class InfoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14000000),
+            color: abayShadow,
             blurRadius: 18,
             offset: Offset(0, 10),
           ),
@@ -36,7 +36,7 @@ class InfoCard extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: cbeBlue,
+              color: abayPrimary,
             ),
           ),
           const SizedBox(height: 10),
@@ -51,7 +51,7 @@ class InfoCard extends StatelessWidget {
             Text(
               caption!,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF6B6B6B),
+                color: abayTextSoft,
               ),
             ),
           ],

@@ -9,7 +9,7 @@ Flutter app workspace for member-facing banking features including savings, loan
 
 Example:
 ```bash
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4000
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4008
 ```
 
 Explicit local demo mode:
@@ -18,9 +18,9 @@ flutter run --dart-define=APP_DEMO_MODE=true
 ```
 
 Platform notes:
-- iOS simulator and desktop: `http://127.0.0.1:4000`
-- Android emulator: `http://10.0.2.2:4000`
-- Physical device: `http://YOUR_MAC_LOCAL_IP:4000`
+- iOS simulator and desktop: `http://127.0.0.1:4008`
+- Android emulator: `http://10.0.2.2:4008`
+- Physical device: `http://YOUR_MAC_LOCAL_IP:4008`
 
 ## Android Release Signing
 

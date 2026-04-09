@@ -12,10 +12,10 @@ npm run start:dev
 ```
 
 Default backend URL:
-- `http://localhost:4000`
+- `http://localhost:4008`
 
 Default MongoDB:
-- `mongodb://localhost:27017/cbe_bank_app`
+- `mongodb://localhost:27017/bunna_bank_app`
 
 Default storage:
 - `STORAGE_PROVIDER=local`
@@ -26,7 +26,7 @@ Default storage:
 ```bash
 cd web
 npm install
-VITE_API_BASE_URL=http://localhost:4000 npm run dev
+VITE_API_BASE_URL=http://localhost:4008 npm run dev
 ```
 
 ## Mobile
@@ -34,7 +34,7 @@ VITE_API_BASE_URL=http://localhost:4000 npm run dev
 ```bash
 cd mobile
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4000
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4008
 ```
 
 ## Local Helper
@@ -56,7 +56,7 @@ To print the equivalent manual commands:
 Update `backend/.env` with:
 
 ```env
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/cbe_bank_app
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/bunna_bank_app
 ```
 
 Do not commit Atlas credentials.

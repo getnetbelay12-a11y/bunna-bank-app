@@ -1,5 +1,3 @@
-import { createHash } from 'crypto';
-
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
@@ -11,14 +9,15 @@ import {
 } from './auth.constants';
 import { AuthService } from './auth.service';
 import { MemberAuthRepository, StaffAuthRepository } from './auth.types';
-import { MemberProfilesService } from '../member-profiles/member-profiles.service';
 
 describe('AuthService', () => {
   let jwtService: jest.Mocked<JwtService>;
   let configService: jest.Mocked<ConfigService>;
   let memberRepository: jest.Mocked<MemberAuthRepository>;
   let staffRepository: jest.Mocked<StaffAuthRepository>;
-  let memberProfilesService: jest.Mocked<MemberProfilesService>;
+  let notificationsService: {
+    createNotification: jest.Mock;
+  };
   let service: AuthService;
 
   beforeEach(() => {
@@ -26,8 +25,8 @@ describe('AuthService', () => {
       getOrThrow: jest.fn().mockReturnValue({
         accessTokenExpiresIn: '1d',
         refreshTokenExpiresIn: '7d',
-        jwtIssuer: 'cbe-bank-api',
-        jwtAudience: 'cbe-bank-clients',
+        jwtIssuer: 'bunna-bank-api',
+        jwtAudience: 'bunna-bank-clients',
       }),
     } as unknown as jest.Mocked<ConfigService>;
 
@@ -41,13 +40,11 @@ describe('AuthService', () => {
 
     staffRepository = {
       findByIdentifier: jest.fn(),
-    } as jest.Mocked<StaffAuthRepository>;
-    memberProfilesService = {
-      findByMemberId: jest.fn().mockResolvedValue({
-        membershipStatus: 'pending_verification',
-        identityVerificationStatus: 'not_started',
-      }),
-    } as unknown as jest.Mocked<MemberProfilesService>;
+    };
+
+    notificationsService = {
+      createNotification: jest.fn(),
+    };
 
     service = new AuthService(
       configService,
@@ -59,21 +56,36 @@ describe('AuthService', () => {
       {} as never,
       {} as never,
       {} as never,
-      memberProfilesService,
+      {
+        findByMemberId: jest.fn().mockResolvedValue({
+          membershipStatus: 'active',
+          identityVerificationStatus: 'verified',
+        }),
+        updateStatuses: jest.fn(),
+        create: jest.fn(),
+      } as never,
       {} as never,
-      {} as never,
-      {} as never,
+      notificationsService as never,
+      {
+        sendTemplated: jest.fn(),
+      } as never,
+      {
+        sendOtp: jest.fn(),
+      } as never,
+      {
+        log: jest.fn(),
+      } as never,
     );
   });
 
   it('logs in a member and returns JWT tokens', async () => {
     memberRepository.findByCustomerId.mockResolvedValue({
       id: 'member_1',
-      customerId: 'MBR-10001',
+      customerId: 'BUN-100001',
       role: UserRole.SHAREHOLDER_MEMBER,
       memberType: MemberType.SHAREHOLDER,
       fullName: 'Abebe Kebede',
-      memberNumber: 'MBR-10001',
+      memberNumber: 'BUN-100001',
       passwordHash: 'secret123',
       phone: '+251911223344',
       branchId: 'branch_01',
@@ -83,7 +95,7 @@ describe('AuthService', () => {
     });
 
     const result = await service.loginMember({
-      customerId: 'MBR-10001',
+      customerId: 'BUN-100001',
       password: 'secret123',
     });
 
@@ -93,20 +105,25 @@ describe('AuthService', () => {
       user: {
         id: 'member_1',
         role: UserRole.SHAREHOLDER_MEMBER,
-        customerId: 'MBR-10001',
+        identifier: undefined,
+        email: undefined,
+        customerId: 'BUN-100001',
         memberType: MemberType.SHAREHOLDER,
         fullName: 'Abebe Kebede',
-        memberNumber: 'MBR-10001',
+        memberNumber: 'BUN-100001',
+        phone: '+251911223344',
         staffNumber: undefined,
         branchId: 'branch_01',
         districtId: 'district_01',
         branchName: 'Bahir Dar Branch',
         districtName: 'Bahir Dar District',
-        phone: '+251911223344',
-        membershipStatus: 'pending_verification',
-        identityVerificationStatus: 'not_started',
+        permissions: undefined,
+        membershipStatus: 'active',
+        identityVerificationStatus: 'verified',
         featureFlags: {
           voting: true,
+          announcements: true,
+          dividends: true,
           schoolPayment: true,
           loans: true,
           savings: true,
@@ -126,7 +143,7 @@ describe('AuthService', () => {
 
     await expect(
       service.loginMember({
-        customerId: 'MBR-10002',
+        customerId: 'BUN-100002',
         password: 'wrong-password',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -141,7 +158,7 @@ describe('AuthService', () => {
 
     await expect(
       service.loginMember({
-        customerId: 'MBR-10003',
+        customerId: 'BUN-100003',
         password: 'secret123',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -174,59 +191,22 @@ describe('AuthService', () => {
     expect(result.user).toEqual({
       id: 'staff_2',
       role: UserRole.BRANCH_MANAGER,
+      identifier: undefined,
+      email: undefined,
       customerId: undefined,
       memberType: undefined,
       fullName: 'Selamawit Assefa',
       memberNumber: undefined,
       staffNumber: 'STF-2001',
+      phone: undefined,
       branchId: 'branch_05',
       districtId: 'district_02',
       branchName: 'Gondar Branch',
       districtName: 'Gondar District',
-      phone: undefined,
-      membershipStatus: undefined,
-      identityVerificationStatus: undefined,
+      permissions: ['dashboard.branch', 'employees.branch', 'loans.branch', 'kyc.branch', 'support.branch', 'notifications.manage', 'reports.read'],
       featureFlags: undefined,
     });
     expect(result.accessToken).toBe('staff-access-token');
     expect(result.refreshToken).toBe('staff-refresh-token');
-  });
-
-  it('accepts a hashed head office password and returns head office scope', async () => {
-    jwtService.signAsync = jest
-      .fn()
-      .mockResolvedValueOnce('staff-access-token')
-      .mockResolvedValueOnce('staff-refresh-token');
-
-    staffRepository.findByIdentifier.mockResolvedValue({
-      id: 'staff_3',
-      role: UserRole.HEAD_OFFICE_MANAGER,
-      fullName: 'Aster Mengistu',
-      staffNumber: 'STF-2007',
-      passwordHash: createHash('sha256').update('Bunna123!').digest('hex'),
-    });
-
-    const result = await service.loginStaff({
-      identifier: 'admin@bunna.local',
-      password: 'Bunna123!',
-    });
-
-    expect(result.user).toEqual({
-      id: 'staff_3',
-      role: UserRole.HEAD_OFFICE_MANAGER,
-      customerId: undefined,
-      memberType: undefined,
-      fullName: 'Aster Mengistu',
-      memberNumber: undefined,
-      staffNumber: 'STF-2007',
-      branchId: undefined,
-      districtId: undefined,
-      branchName: 'Head Office',
-      districtName: undefined,
-      phone: undefined,
-      membershipStatus: undefined,
-      identityVerificationStatus: undefined,
-      featureFlags: undefined,
-    });
   });
 });

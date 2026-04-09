@@ -1,5 +1,5 @@
 {
-  "name": "cbe-bank-backend",
+  "name": "bunna-bank-backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,9 @@
     "build": "nest build",
     "seed": "ts-node scripts/seed.ts",
     "seed:demo": "ts-node src/scripts/seed-demo.ts",
+    "verify:reminder": "ts-node src/scripts/verify-reminder-flow.ts",
+    "verify:customer-reminders": "ts-node src/scripts/verify-customer-reminders.ts",
+    "push:test": "ts-node src/scripts/send-test-school-push.ts",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch"

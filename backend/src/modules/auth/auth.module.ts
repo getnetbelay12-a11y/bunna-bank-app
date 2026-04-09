@@ -10,7 +10,12 @@ import { Branch, BranchSchema } from '../members/schemas/branch.schema';
 import { District, DistrictSchema } from '../members/schemas/district.schema';
 import { Member, MemberSchema } from '../members/schemas/member.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
+import {
+  MemberSecuritySetting,
+  MemberSecuritySettingSchema,
+} from '../service-placeholders/schemas/member-security-setting.schema';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
+import { AuthSecurityService } from './auth-security.service';
 import {
   MEMBER_AUTH_REPOSITORY,
   STAFF_AUTH_REPOSITORY,
@@ -36,6 +41,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       { name: District.name, schema: DistrictSchema },
       { name: AuthSession.name, schema: AuthSessionSchema },
       { name: Device.name, schema: DeviceSchema },
+      { name: MemberSecuritySetting.name, schema: MemberSecuritySettingSchema },
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -59,6 +65,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthSecurityService,
     JwtStrategy,
     MongooseMemberAuthRepository,
     MongooseStaffAuthRepository,
@@ -71,6 +78,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       useExisting: MongooseStaffAuthRepository,
     },
   ],
-  exports: [AuthService],
+  exports: [AuthService, AuthSecurityService],
 })
 export class AuthModule {}

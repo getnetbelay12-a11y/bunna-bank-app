@@ -19,6 +19,7 @@ function createModelMock() {
 describe('ChatService', () => {
   let service: ChatService;
   const conversationModel = createModelMock();
+  const loanModel = createModelMock();
   const messageModel = createModelMock();
   const participantModel = createModelMock();
   const assignmentModel = createModelMock();
@@ -27,7 +28,7 @@ describe('ChatService', () => {
     createNotification: jest.fn(),
   } as unknown as jest.Mocked<NotificationsService>;
   const auditService = {
-    log: jest.fn(),
+    logActorAction: jest.fn(),
   } as unknown as jest.Mocked<AuditService>;
 
   beforeEach(() => {
@@ -35,6 +36,7 @@ describe('ChatService', () => {
 
     service = new ChatService(
       conversationModel as never,
+      loanModel as never,
       messageModel as never,
       participantModel as never,
       assignmentModel as never,
@@ -57,6 +59,7 @@ describe('ChatService', () => {
       status: 'waiting_agent',
       channel: 'mobile',
       category: ChatIssueCategory.LOAN_ISSUE,
+      routingLevel: 'general',
       escalationFlag: false,
       createdAt: new Date('2026-03-11T10:00:00Z'),
       updatedAt: new Date('2026-03-11T10:00:00Z'),
@@ -100,6 +103,75 @@ describe('ChatService', () => {
     expect(participantModel.create).toHaveBeenCalled();
   });
 
+  it('routes loan support chats to the district queue when the loan is at district review', async () => {
+    const conversationId = new Types.ObjectId();
+    const customerId = new Types.ObjectId();
+    const districtId = new Types.ObjectId();
+    const loanId = new Types.ObjectId();
+
+    loanModel.findById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({
+        _id: loanId,
+        memberId: customerId,
+        branchId: new Types.ObjectId(),
+        districtId,
+        currentLevel: 'district',
+      }),
+    });
+    conversationModel.findOne.mockResolvedValue(null);
+    conversationModel.create.mockResolvedValue({
+      _id: conversationId,
+      memberId: customerId,
+      memberName: 'Abebe Kebede',
+      phoneNumber: '0911000001',
+      memberType: MemberType.MEMBER,
+      status: 'waiting_agent',
+      channel: 'mobile',
+      category: ChatIssueCategory.LOAN_ISSUE,
+      loanId,
+      routingLevel: 'district',
+      districtId,
+      escalationFlag: false,
+      createdAt: new Date('2026-03-11T10:00:00Z'),
+      updatedAt: new Date('2026-03-11T10:00:00Z'),
+    });
+    participantModel.create.mockResolvedValue(undefined);
+    messageModel.create.mockResolvedValue({
+      _id: new Types.ObjectId(),
+      conversationId,
+      senderType: 'system',
+      senderId: 'smart-support-assistant',
+      message: 'Bot reply',
+      messageType: 'system',
+      createdAt: new Date('2026-03-11T10:02:00Z'),
+    });
+    statusLogModel.create.mockResolvedValue(undefined);
+
+    const result = await service.createConversation(
+      {
+        sub: customerId.toString(),
+        memberId: customerId.toString(),
+        role: UserRole.MEMBER,
+        memberType: MemberType.MEMBER,
+        districtId: districtId.toString(),
+      } as never,
+      {
+        issueCategory: ChatIssueCategory.LOAN_ISSUE,
+        loanId: loanId.toString(),
+      },
+    );
+
+    expect(conversationModel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        loanId,
+        routingLevel: 'district',
+        branchId: undefined,
+        districtId,
+      }),
+    );
+    expect(result.routingLevel).toBe('district');
+  });
+
   it('assigns an open conversation to an agent', async () => {
     const conversationId = new Types.ObjectId();
     const customerId = new Types.ObjectId();
@@ -123,7 +195,7 @@ describe('ChatService', () => {
     assignmentModel.create.mockResolvedValue(undefined);
     participantModel.updateOne.mockResolvedValue(undefined);
     statusLogModel.create.mockResolvedValue(undefined);
-    auditService.log.mockResolvedValue({} as never);
+    auditService.logActorAction.mockResolvedValue({} as never);
     messageModel.find.mockReturnValue({
       sort: jest.fn().mockReturnThis(),
       lean: jest.fn().mockResolvedValue([]),
@@ -140,6 +212,15 @@ describe('ChatService', () => {
     expect(save).toHaveBeenCalled();
     expect(result.assignedAgentId).toBe(agentId.toString());
     expect(assignmentModel.create).toHaveBeenCalled();
+    expect(notificationsService.createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: customerId.toString(),
+        type: NotificationType.SUPPORT_ASSIGNED,
+        actionLabel: 'Open support',
+        priority: 'normal',
+        deepLink: `/support/${conversationId.toString()}`,
+      }),
+    );
   });
 
   it('notifies the customer when an agent replies', async () => {
@@ -169,7 +250,7 @@ describe('ChatService', () => {
       lean: jest.fn().mockResolvedValue([]),
     });
     notificationsService.createNotification.mockResolvedValue({} as never);
-    auditService.log.mockResolvedValue({} as never);
+    auditService.logActorAction.mockResolvedValue({} as never);
 
     await service.replyAsAgent(
       {
@@ -183,7 +264,10 @@ describe('ChatService', () => {
     expect(notificationsService.createNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: customerId.toString(),
-        type: NotificationType.CHAT,
+        type: NotificationType.SUPPORT_REPLY,
+        actionLabel: 'Open support',
+        priority: 'high',
+        deepLink: `/support/${conversationId.toString()}`,
       }),
     );
   });

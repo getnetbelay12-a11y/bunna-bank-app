@@ -16,7 +16,7 @@ export class LocationsController {
   @Public()
   @Get('cities')
   getCities(@Query('region') region?: string) {
-    return this.locationsService.getCities(region ?? 'Amhara');
+    return this.locationsService.getCities(region ?? 'National');
   }
 
   @Public()

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/models/member_session.dart';
 import '../core/models/login_challenge.dart';
 import '../core/services/app_services.dart';
+import '../core/services/native_push_bridge.dart';
 
 enum AppLanguage { english, amharic }
 
@@ -23,7 +24,8 @@ class AppController extends ChangeNotifier {
   Timer? _sessionTimer;
   AppLanguage _language = AppLanguage.english;
 
-  static const Duration _sessionTimeout = Duration(minutes: 15);
+  static const Duration _sessionTimeout = Duration(hours: 8);
+  static const String _appVersion = '0.1.0';
 
   MemberSession? get session => _session;
   bool get isAuthenticating => _isAuthenticating;
@@ -77,9 +79,13 @@ class AppController extends ChangeNotifier {
         biometricEnabled: biometricEnabled,
         deviceId: deviceId,
       );
+      unawaited(_registerDeviceTokenForSession(_session!));
       _startSessionTimeout();
-    } catch (_) {
-      _authError = 'PIN verification failed. Try again.';
+    } catch (error) {
+      _authError = _resolveAuthError(
+        error,
+        fallback: 'PIN verification failed. Try again.',
+      );
       rethrow;
     } finally {
       _isAuthenticating = false;
@@ -100,9 +106,13 @@ class AppController extends ChangeNotifier {
         customerId: customerId,
         password: password,
       );
+      unawaited(_registerDeviceTokenForSession(_session!));
       _startSessionTimeout();
-    } catch (_) {
-      _authError = 'Unable to sign in. Check your credentials and try again.';
+    } catch (error) {
+      _authError = _resolveAuthError(
+        error,
+        fallback: 'Unable to sign in. Check your credentials and try again.',
+      );
     } finally {
       _isAuthenticating = false;
       notifyListeners();
@@ -141,9 +151,82 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPreviewSession(MemberSession session) {
+    _session = session;
+    _authError = null;
+    unawaited(_registerDeviceTokenForSession(session));
+    _startSessionTimeout();
+    notifyListeners();
+  }
+
+  Future<void> restoreSession() async {
+    await services.sessionStore.load();
+    final restoredSession = await services.authApi.restoreSession();
+    if (restoredSession == null) {
+      return;
+    }
+
+    _session = restoredSession;
+    _authError = null;
+    _startSessionTimeout();
+    notifyListeners();
+  }
+
   void _startSessionTimeout() {
     _sessionTimer?.cancel();
     _sessionTimer = Timer(_sessionTimeout, logout);
+  }
+
+  Future<void> _registerDeviceTokenForSession(MemberSession session) async {
+    final platform =
+        defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+    final deviceId = 'device-$platform-${session.customerId.toLowerCase()}';
+    final token = _resolvePushToken(
+      await NativePushBridge.requestPushToken(),
+      platform: platform,
+    );
+
+    if (token == null) {
+      return;
+    }
+
+    try {
+      await services.notificationApi.registerDeviceToken(
+        deviceId: deviceId,
+        platform: platform,
+        token: token,
+        appVersion: _appVersion,
+      );
+    } catch (_) {
+      // Keep login resilient when push registration fails.
+    }
+  }
+
+  Future<void> registerNativePushToken(String token) async {
+    final session = _session;
+    if (session == null) {
+      return;
+    }
+
+    final platform =
+        defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+    final normalizedToken = _resolvePushToken(token, platform: platform);
+    if (normalizedToken == null) {
+      return;
+    }
+
+    final deviceId = 'device-$platform-${session.customerId.toLowerCase()}';
+
+    try {
+      await services.notificationApi.registerDeviceToken(
+        deviceId: deviceId,
+        platform: platform,
+        token: normalizedToken,
+        appVersion: _appVersion,
+      );
+    } catch (_) {
+      // Keep app flow resilient when late push token sync fails.
+    }
   }
 
   @override
@@ -151,6 +234,26 @@ class AppController extends ChangeNotifier {
     _sessionTimer?.cancel();
     super.dispose();
   }
+}
+
+String? _resolvePushToken(
+  String? candidate, {
+  required String platform,
+}) {
+  final normalized = candidate?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+
+  if (platform == 'ios' && normalized == 'ios-simulator') {
+    return normalized;
+  }
+
+  if (normalized.startsWith('push-$platform-')) {
+    return null;
+  }
+
+  return normalized;
 }
 
 String _resolveAuthError(Object error, {required String fallback}) {

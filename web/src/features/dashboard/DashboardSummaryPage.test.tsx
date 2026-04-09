@@ -41,6 +41,10 @@ describe('DashboardSummaryPage', () => {
                 participationRate: 43.44,
               },
             ]),
+            getOnboardingReviewQueue: vi.fn(),
+            getAutopayOperations: vi.fn(),
+            updateAutopayOperation: vi.fn(),
+            updateOnboardingReview: vi.fn(),
             getHeadOfficeDistrictSummary: vi.fn(),
             getHeadOfficeTopDistricts: vi.fn(),
             getHeadOfficeDistrictWatchlist: vi.fn(),
@@ -50,6 +54,56 @@ describe('DashboardSummaryPage', () => {
             getBranchEmployeeSummary: vi.fn(),
             getBranchTopEmployees: vi.fn(),
             getBranchEmployeeWatchlist: vi.fn(),
+            getHeadOfficeCommandCenter: vi.fn().mockResolvedValue({
+              totalCustomers: 284000,
+              totalShareholders: 64000,
+              totalSavings: 920000000,
+              totalLoans: 14800,
+              pendingApprovals: 23,
+              riskAlerts: {
+                totalAlerts: 18,
+                loanAlerts: 9,
+                kycAlerts: 4,
+                supportAlerts: 3,
+                notificationAlerts: 2,
+              },
+              districtPerformance: {
+                scope: 'district',
+                period: 'week',
+                generatedAt: '2026-03-10T08:00:00.000Z',
+                kpis: {
+                  membersServed: 100,
+                  customersHelped: 100,
+                  loansHandled: 40,
+                  loansApproved: 20,
+                  loansEscalated: 5,
+                  kycCompleted: 35,
+                  supportResolved: 25,
+                  transactionsProcessed: 250,
+                  avgHandlingTime: 18,
+                  pendingTasks: 12,
+                  pendingApprovals: 8,
+                  responseTimeMinutes: 14,
+                  score: 82,
+                  status: 'good',
+                },
+                items: [],
+              },
+              supportOverview: {
+                openChats: 12,
+                assignedChats: 6,
+                resolvedChats: 45,
+                escalatedChats: 4,
+              },
+              governanceStatus: {
+                activeVotes: 1,
+                draftVotes: 2,
+                publishedVotes: 3,
+                shareholderAnnouncements: 5,
+              },
+            }),
+            getDistrictCommandCenter: vi.fn(),
+            getBranchCommandCenter: vi.fn(),
           },
           votingApi: {
             getVotes: vi.fn(),
@@ -65,8 +119,25 @@ describe('DashboardSummaryPage', () => {
             getLogs: vi.fn(),
             getInsuranceAlerts: vi.fn(),
           },
+          recommendationApi: {
+            getDashboardSummary: vi.fn().mockResolvedValue({
+              recommendationsGeneratedToday: 10,
+              topRecommendationType: 'customer_followup',
+              completionRate: 40,
+              dismissedRate: 10,
+              highOpportunityCustomers: 4,
+              customersMissingKyc: 3,
+              customersSuitableForAutopay: 5,
+            }),
+            getCustomerRecommendations: vi.fn().mockResolvedValue({
+              title: 'Smart Recommendations',
+              recommendations: [],
+            }),
+            generateForCustomer: vi.fn(),
+          },
           auditApi: {
             getByEntity: vi.fn(),
+            getEntityAuditTrail: vi.fn(),
             getByActor: vi.fn(),
           },
           supportApi: {
@@ -87,12 +158,15 @@ describe('DashboardSummaryPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('1284')).toBeInTheDocument();
+      expect(screen.getByText('1,284')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('8420')).toBeInTheDocument();
+    expect(screen.getByText('8,420')).toBeInTheDocument();
     expect(screen.getByText('528')).toBeInTheDocument();
     expect(screen.getByText('43%')).toBeInTheDocument();
-    expect(screen.getByText('Branch Review')).toBeInTheDocument();
+    expect(screen.getAllByText('Branch Review').length).toBeGreaterThan(0);
+    expect(screen.getByText('Live Feed')).toBeInTheDocument();
+    expect(screen.getByText('Risk alert load')).toBeInTheDocument();
+    expect(screen.getByText('23 approvals pending')).toBeInTheDocument();
   });
 });

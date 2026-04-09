@@ -7,16 +7,16 @@ BACKEND_DIR="$ROOT_DIR/backend"
 WEB_DIR="$ROOT_DIR/web"
 MOBILE_DIR="$ROOT_DIR/mobile"
 
-BACKEND_PORT="${BACKEND_PORT:-4000}"
+BACKEND_PORT="${BACKEND_PORT:-4008}"
 WEB_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
 MOBILE_API_BASE_URL="${API_BASE_URL:-$WEB_API_BASE_URL}"
 
 cat <<EOF
-CBE Bank PoC local demo commands
+Bunna Bank PoC local demo commands
 
 1. Start MongoDB
    Ensure MongoDB is running for:
-   ${BACKEND_PORT:+MONGODB_URI=${MONGODB_URI:-mongodb://localhost:27017/cbe_bank_app}}
+   ${BACKEND_PORT:+MONGODB_URI=${MONGODB_URI:-mongodb://localhost:27017/bunna_bank_app}}
 
 2. Seed demo data
    cd "$BACKEND_DIR"

@@ -42,18 +42,10 @@ export class LoansController {
   }
 
   @Get(':loanId/timeline')
-  getLoanTimeline(@Param('loanId') loanId: string) {
-    return {
-      loanId,
-      timeline: [
-        { status: 'submitted', title: 'Submitted' },
-        { status: 'branch_review', title: 'Branch Review' },
-        { status: 'district_review', title: 'District Review' },
-        { status: 'head_office_review', title: 'Head Office Review' },
-        { status: 'approved', title: 'Approved' },
-        { status: 'rejected', title: 'Rejected' },
-        { status: 'disbursed', title: 'Disbursed' },
-      ],
-    };
+  getLoanTimeline(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('loanId') loanId: string,
+  ) {
+    return this.loansService.getLoanTimeline(currentUser, loanId);
   }
 }

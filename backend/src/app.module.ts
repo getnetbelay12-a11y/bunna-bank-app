@@ -7,7 +7,6 @@ import { appConfig } from './config/app.config';
 import { authConfig } from './config/auth.config';
 import { databaseConfig, logMongoConnection } from './config/database.config';
 import { validateEnvironment } from './config/environment.validation';
-import { loadExternalMailEnvironment } from './config/external-mail-env';
 import { loggingConfig } from './config/logging.config';
 import { notificationsConfig } from './config/notifications.config';
 import { storageConfig } from './config/storage.config';
@@ -24,16 +23,29 @@ import { MembersModule } from './modules/members/members.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { RecommendationsModule } from './modules/recommendations/recommendations.module';
 import { SavingsModule } from './modules/savings/savings.module';
 import { ServicePlaceholdersModule } from './modules/service-placeholders/service-placeholders.module';
+import { ServiceRequestsModule } from './modules/service-requests/service-requests.module';
 import { ShareholdersModule } from './modules/shareholders/shareholders.module';
+import { GuardiansModule } from './modules/guardians/guardians.module';
+import { GuardianStudentLinksModule } from './modules/guardian-student-links/guardian-student-links.module';
+import { SchoolPaymentsModule } from './modules/school-payments/school-payments.module';
+import { SchoolReportsModule } from './modules/school-reports/school-reports.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { StaffActivityModule } from './modules/staff-activity/staff-activity.module';
+import { StudentsModule } from './modules/students/students.module';
 import { SupportModule } from './modules/support/support.module';
 import { VotingModule } from './modules/voting/voting.module';
 import { ChatModule } from './modules/chat/chat.module';
-
-loadExternalMailEnvironment();
+import { CardManagementModule } from './modules/card-management/card-management.module';
+import { DemoModule } from './modules/demo/demo.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
+import { InsightsModule } from './modules/insights/insights.module';
+import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
+import { InstitutionsModule } from './modules/institutions/institutions.module';
+import { FeePlansModule } from './modules/fee-plans/fee-plans.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -84,7 +96,19 @@ loadExternalMailEnvironment();
     NotificationsModule,
     ChatModule,
     SupportModule,
+    RecommendationsModule,
+    CardManagementModule,
     ServicePlaceholdersModule,
+    ServiceRequestsModule,
+    InstitutionsModule,
+    StudentsModule,
+    GuardiansModule,
+    GuardianStudentLinksModule,
+    EnrollmentsModule,
+    FeePlansModule,
+    InvoicesModule,
+    SchoolPaymentsModule,
+    SchoolReportsModule,
     SavingsModule,
     ShareholdersModule,
     StaffModule,
@@ -92,6 +116,9 @@ loadExternalMailEnvironment();
     StaffActivityModule,
     DashboardModule,
     ReportsModule,
+    UploadsModule,
+    InsightsModule,
+    DemoModule,
   ],
   controllers: [HealthController],
 })

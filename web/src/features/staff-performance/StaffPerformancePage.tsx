@@ -36,14 +36,14 @@ export function StaffPerformancePage({ session }: StaffPerformancePageProps) {
         description="Ranking, trends, and staff activity summaries for manager review."
       >
         <TrendBars
-          items={
-            items.length > 0
-              ? items.map((item) => ({
-                  label: formatStaffLabel(item.staffId),
-                  value: item.score,
-                }))
-              : [{ label: 'Loading', value: 0 }]
-          }
+          items={items.map((item) => ({
+            label: formatStaffLabel(item.staffId),
+            value: item.score,
+          }))}
+          emptyState={{
+            title: 'No staff trend data',
+            description: 'Staff ranking trends will appear here when performance data is available for this scope.',
+          }}
         />
       </Panel>
 
@@ -53,17 +53,17 @@ export function StaffPerformancePage({ session }: StaffPerformancePageProps) {
       >
         <SimpleTable
           headers={['Staff', 'Customers', 'Transactions', 'Approvals', 'Score']}
-          rows={
-            items.length > 0
-              ? items.map((item) => [
-                  formatStaffLabel(item.staffId),
-                  String(item.customersServed),
-                  String(item.transactionsCount),
-                  String(item.loanApprovedCount),
-                  String(item.score),
-                ])
-              : [['Loading', '...', '...', '...', '...']]
-          }
+          rows={items.map((item) => [
+            formatStaffLabel(item.staffId),
+            String(item.customersServed),
+            String(item.transactionsCount),
+            String(item.loanApprovedCount),
+            String(item.score),
+          ])}
+          emptyState={{
+            title: 'No staff performance records',
+            description: 'Staff ranking data will appear here when performance records are available for this scope.',
+          }}
         />
       </Panel>
     </div>

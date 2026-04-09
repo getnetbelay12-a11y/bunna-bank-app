@@ -2,9 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
+import '../../../../theme/amhara_brand_theme.dart';
 import '../../../app/app_scope.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/models/index.dart';
+import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_input.dart';
 
 class LiveChatDetailScreen extends StatefulWidget {
   const LiveChatDetailScreen({
@@ -31,10 +36,9 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
     super.initState();
     _conversation = widget.initialConversation;
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _refreshConversation(silent: true);
       }
-      _refreshConversation(silent: true);
     });
   }
 
@@ -49,12 +53,10 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
   Widget build(BuildContext context) {
     final services = AppScope.of(context).services;
 
-    return Scaffold(
+    return AppScaffold(
+      title: 'Live Chat',
+      showBack: true,
       resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        leading: const BackButton(),
-        title: const Text('Live Chat'),
-      ),
       body: FutureBuilder<ChatConversation>(
         future: _conversation == null
             ? services.chatApi.fetchConversation(widget.conversationId)
@@ -63,19 +65,23 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
           final conversation = snapshot.data ?? _conversation;
 
           if (snapshot.hasError && conversation == null) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Unable to load this conversation right now. Pull back and try again.',
-                  textAlign: TextAlign.center,
+            return const SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Unable to load this conversation right now. Pull back and try again.',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             );
           }
 
           if (conversation == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const SafeArea(
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
 
           final messages = conversation.messages;
@@ -83,41 +89,67 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
           return SafeArea(
             child: Column(
               children: [
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F1FF),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${_formatStatus(conversation.status)} • ${conversation.issueCategory.replaceAll('_', ' ')}',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: cbeBlue,
-                                    fontWeight: FontWeight.w700,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: AppCard(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Support Conversation',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  AppBadge(
+                                    label: _formatStatus(conversation.status),
+                                    tone: _statusTone(conversation.status),
                                   ),
+                                  AppBadge(
+                                    label: conversation.issueCategory
+                                        .replaceAll('_', ' '),
+                                    tone: AppBadgeTone.neutral,
+                                  ),
+                                  AppBadge(
+                                    label: '${messages.length} messages',
+                                    tone: AppBadgeTone.neutral,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        onPressed: () => _refreshConversation(),
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                    ],
+                        IconButton(
+                          onPressed: () => _refreshConversation(),
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 Expanded(
                   child: messages.isEmpty
                       ? const Center(
-                          child: Text('No messages yet. Start the conversation below.'),
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text(
+                              'No messages yet. Start the conversation below.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
                         )
                       : ListView.builder(
                           reverse: true,
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(20),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final item = messages[messages.length - 1 - index];
@@ -128,24 +160,20 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
                                   ? Alignment.centerRight
                                   : Alignment.centerLeft,
                               child: Container(
-                                constraints: const BoxConstraints(maxWidth: 320),
+                                constraints:
+                                    const BoxConstraints(maxWidth: 320),
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: isCustomer ? cbeBlue : Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
+                                  color: isCustomer
+                                      ? abayPrimary
+                                      : abaySurfaceElevated,
+                                  borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: isCustomer
-                                        ? cbeBlue
-                                        : const Color(0xFFD8E3F5),
+                                        ? abayPrimary
+                                        : abayBorder,
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x0A000000),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,17 +187,21 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
                                           .labelLarge
                                           ?.copyWith(
                                             color: isCustomer
-                                                ? const Color(0xFFD6E4FF)
-                                                : const Color(0xFF475569),
-                                            fontWeight: FontWeight.w700,
+                                                ? Colors.white
+                                                : abayPrimary,
                                           ),
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
                                       item.message,
-                                      style: TextStyle(
-                                        color: isCustomer ? Colors.white : null,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: isCustomer
+                                                ? Colors.white
+                                                : abayText,
+                                          ),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
@@ -179,8 +211,8 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
                                           .labelSmall
                                           ?.copyWith(
                                             color: isCustomer
-                                                ? const Color(0xFFD6E4FF)
-                                                : const Color(0xFF64748B),
+                                                ? Colors.white70
+                                                : abayTextSoft,
                                           ),
                                     ),
                                   ],
@@ -193,74 +225,84 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
                 AnimatedPadding(
                   duration: const Duration(milliseconds: 180),
                   padding: EdgeInsets.fromLTRB(
-                    16,
-                    16,
-                    16,
-                    16 + MediaQuery.of(context).viewInsets.bottom,
+                    20,
+                    12,
+                    20,
+                    20 + MediaQuery.of(context).viewInsets.bottom,
                   ),
                   child: SafeArea(
                     top: false,
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Expanded(
-                          child: TextField(
-                            controller: _messageController,
-                            minLines: 1,
-                            maxLines: 4,
-                            decoration: const InputDecoration(
+                          child: AppCard(
+                            padding: const EdgeInsets.all(12),
+                            child: AppInput(
+                              controller: _messageController,
                               hintText: 'Write a message',
+                              label: 'Reply',
+                              minLines: 1,
+                              maxLines: 4,
                             ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        FilledButton(
-                          onPressed: _sending
-                              ? null
-                              : () async {
-                                  final value = _messageController.text.trim();
-                                  if (value.isEmpty) {
-                                    return;
-                                  }
-
-                                  setState(() {
-                                    _sending = true;
-                                  });
-                                  final messenger =
-                                      ScaffoldMessenger.of(context);
-
-                                  try {
-                                    final updated =
-                                        await services.chatApi.sendMessage(
-                                      conversation.id,
-                                      message: value,
-                                    );
-
-                                    _messageController.clear();
-                                    setState(() {
-                                      _conversation = updated;
-                                      _sending = false;
-                                    });
-                                  } catch (error) {
-                                    if (!mounted) {
+                        SizedBox(
+                          width: 112,
+                          child: AppButton(
+                            label: _sending ? 'Sending...' : 'Send',
+                            onPressed: _sending
+                                ? null
+                                : () async {
+                                    final value =
+                                        _messageController.text.trim();
+                                    if (value.isEmpty) {
                                       return;
                                     }
+
                                     setState(() {
-                                      _sending = false;
+                                      _sending = true;
                                     });
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          _formatChatError(
-                                            error,
-                                            fallback:
-                                                'Unable to send your message right now.',
+                                    final messenger =
+                                        ScaffoldMessenger.of(context);
+
+                                    try {
+                                      final updated =
+                                          await services.chatApi.sendMessage(
+                                        conversation.id,
+                                        message: value,
+                                      );
+
+                                      _messageController.clear();
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _conversation = updated;
+                                        _sending = false;
+                                      });
+                                    } catch (error) {
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _sending = false;
+                                      });
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            _formatChatError(
+                                              error,
+                                              fallback:
+                                                  'Unable to send your message right now.',
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  }
-                                },
-                          child: Text(_sending ? 'Sending...' : 'Send'),
+                                      );
+                                    }
+                                  },
+                          ),
                         ),
                       ],
                     ),
@@ -299,6 +341,18 @@ class _LiveChatDetailScreenState extends State<LiveChatDetailScreen> {
 
   String _formatStatus(String value) =>
       value.replaceAll('_', ' ').toUpperCase();
+
+  AppBadgeTone _statusTone(String value) {
+    switch (value) {
+      case 'resolved':
+        return AppBadgeTone.success;
+      case 'assigned':
+      case 'open':
+        return AppBadgeTone.primary;
+      default:
+        return AppBadgeTone.neutral;
+    }
+  }
 
   String _formatTimestamp(DateTime value) {
     final hour = value.hour.toString().padLeft(2, '0');

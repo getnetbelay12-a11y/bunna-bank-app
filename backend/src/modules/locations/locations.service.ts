@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 
 import { Branch, BranchDocument } from '../members/schemas/branch.schema';
 
-const DEFAULT_REGION = 'Amhara';
+const DEFAULT_REGION = 'National';
 
 @Injectable()
 export class LocationsService {

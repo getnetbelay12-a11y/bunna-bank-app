@@ -37,6 +37,8 @@ export class MembersService {
       membershipStatus: profile?.membershipStatus ?? 'pending_verification',
       identityVerificationStatus:
         profile?.identityVerificationStatus ?? 'not_started',
+      onboardingReviewStatus: profile?.onboardingReviewStatus ?? 'submitted',
+      onboardingReviewNote: profile?.onboardingReviewNote,
     };
   }
 
@@ -79,6 +81,8 @@ export class MembersService {
       membershipStatus: profile?.membershipStatus ?? 'pending_verification',
       identityVerificationStatus:
         profile?.identityVerificationStatus ?? 'not_started',
+      onboardingReviewStatus: profile?.onboardingReviewStatus ?? 'submitted',
+      onboardingReviewNote: profile?.onboardingReviewNote,
     };
   }
 
@@ -95,6 +99,10 @@ export class MembersService {
     }
 
     return member;
+  }
+
+  async findMemberByCustomerId(customerId: string): Promise<MemberProfile | null> {
+    return this.membersRepository.findByCustomerId(customerId);
   }
 
   async createMember(

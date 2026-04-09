@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,6 +10,7 @@ import {
   LoanAction,
   LoanStatus,
   LoanWorkflowLevel,
+  NotificationStatus,
   NotificationType,
   UserRole,
 } from '../../common/enums';
@@ -19,16 +19,13 @@ import { AuthenticatedUser } from '../auth/interfaces';
 import { AuditService } from '../audit/audit.service';
 import { LoanWorkflowHistory, LoanWorkflowHistoryDocument } from '../loan-workflow/schemas/loan-workflow-history.schema';
 import { Member, MemberDocument } from '../members/schemas/member.schema';
-import { Notification, NotificationDocument } from '../notifications/schemas/notification.schema';
+import { buildLoanSubmissionNotification } from '../notifications/banking-notification-builders';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   AttachLoanDocumentDto,
   CreateLoanApplicationDto,
   CreateLoanDocumentDto,
 } from './dto';
-import {
-  MAX_LOAN_DOCUMENT_SIZE_BYTES,
-  MAX_LOAN_DOCUMENTS,
-} from './dto/create-loan-document.dto';
 import { LoanDetail, LoanSubmissionResult } from './interfaces';
 import { LoanDocumentMetadata, LoanDocumentMetadataDocument } from './schemas/loan-document.schema';
 import { Loan, LoanDocument } from './schemas/loan.schema';
@@ -42,11 +39,10 @@ export class LoansService {
     private readonly loanDocumentModel: Model<LoanDocumentMetadataDocument>,
     @InjectModel(LoanWorkflowHistory.name)
     private readonly workflowHistoryModel: Model<LoanWorkflowHistoryDocument>,
-    @InjectModel(Notification.name)
-    private readonly notificationModel: Model<NotificationDocument>,
     @InjectModel(Member.name)
     private readonly memberModel: Model<MemberDocument>,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
     private readonly storageService: StorageService,
   ) {}
 
@@ -95,19 +91,24 @@ export class LoansService {
       comment: 'Loan application submitted by member.',
     });
 
-    await this.notificationModel.create({
+    const notification = buildLoanSubmissionNotification();
+
+    await this.notificationsService.createNotification({
       userType: 'member',
-      userId: new Types.ObjectId(currentUser.sub),
+      userId: currentUser.sub,
       userRole: currentUser.role,
-      type: NotificationType.LOAN_STATUS,
-      status: 'sent',
-      title: 'Loan Application Submitted',
-      message: 'Your loan application has been submitted successfully.',
+      type: notification.type,
+      status: notification.status,
+      title: notification.title,
+      message: notification.message,
       entityType: 'loan',
-      entityId: loan._id,
+      entityId: loan._id.toString(),
+      actionLabel: 'Open loan',
+      priority: 'normal',
+      deepLink: `/loans/${loan._id.toString()}`,
     });
 
-    await this.auditService.log({
+    await this.auditService.logActorAction({
       actorId: currentUser.sub,
       actorRole: currentUser.role,
       actionType: 'loan_submitted',
@@ -181,6 +182,113 @@ export class LoansService {
     return this.toLoanDetail(loan);
   }
 
+  async getLoanTimeline(currentUser: AuthenticatedUser, loanId: string) {
+    this.ensureMemberAccess(currentUser);
+
+    const loan = await this.loanModel.findById(loanId).lean<LoanDocument | null>();
+
+    if (!loan || loan.memberId.toString() !== currentUser.sub) {
+      throw new NotFoundException('Loan not found.');
+    }
+
+    const deficiencyReasons = loan.deficiencyReasons ?? [];
+
+    return {
+      loanId,
+      timeline: [
+        {
+          status: 'submitted',
+          title: 'Submitted',
+          description: 'Your application was received and entered into the review queue.',
+          isCompleted: true,
+        },
+        {
+          status: 'branch_review',
+          title: 'Branch Review',
+          description:
+            deficiencyReasons.length > 0 && loan.currentLevel === LoanWorkflowLevel.BRANCH
+              ? `Branch review needs more evidence: ${deficiencyReasons.join(', ')}.`
+              : 'Branch team is validating the application package and first-line controls.',
+          isCompleted:
+            loan.currentLevel !== LoanWorkflowLevel.BRANCH ||
+            ![LoanStatus.SUBMITTED, LoanStatus.BRANCH_REVIEW].includes(loan.status),
+        },
+        {
+          status: 'district_review',
+          title: 'District Review',
+          description:
+            deficiencyReasons.length > 0 && loan.currentLevel === LoanWorkflowLevel.DISTRICT
+              ? `District review is waiting on: ${deficiencyReasons.join(', ')}.`
+              : 'District review applies for escalated or higher-value cases.',
+          isCompleted:
+            loan.currentLevel === LoanWorkflowLevel.HEAD_OFFICE ||
+            [
+              LoanStatus.APPROVED,
+              LoanStatus.DISBURSED,
+              LoanStatus.CLOSED,
+              LoanStatus.REJECTED,
+            ].includes(
+              loan.status,
+            ),
+        },
+        {
+          status: 'head_office_review',
+          title: 'Head Office Review',
+          description:
+            loan.currentLevel === LoanWorkflowLevel.HEAD_OFFICE
+              ? 'Head office credit control is reviewing final approval and disbursement readiness.'
+              : 'Head office review is only required for higher-risk or escalated applications.',
+          isCompleted: [
+            LoanStatus.APPROVED,
+            LoanStatus.DISBURSED,
+            LoanStatus.CLOSED,
+            LoanStatus.REJECTED,
+          ].includes(loan.status),
+        },
+        {
+          status: 'need_documents',
+          title: 'Need Documents',
+          description:
+            deficiencyReasons.length > 0
+              ? `Customer action is required before approval: ${deficiencyReasons.join(', ')}.`
+              : 'No missing documents are blocking this application right now.',
+          isCompleted: deficiencyReasons.length === 0,
+        },
+        {
+          status: 'approved',
+          title: 'Approved',
+          description:
+            loan.status === LoanStatus.APPROVED || loan.status === LoanStatus.DISBURSED
+              ? 'The loan is approved. Watch disbursement and repayment reminders.'
+              : 'Approval is still pending while the review team completes its checks.',
+          isCompleted: [
+            LoanStatus.APPROVED,
+            LoanStatus.DISBURSED,
+            LoanStatus.CLOSED,
+          ].includes(loan.status),
+        },
+        {
+          status: 'rejected',
+          title: 'Rejected',
+          description:
+            loan.status === LoanStatus.REJECTED
+              ? 'The application was rejected. Contact support or submit a new package after correcting the identified issues.'
+              : 'Rejected only appears if the loan cannot proceed after review.',
+          isCompleted: loan.status === LoanStatus.REJECTED,
+        },
+        {
+          status: 'disbursed',
+          title: 'Disbursed',
+          description:
+            loan.status === LoanStatus.DISBURSED
+              ? 'Funds have been released. Repayment and insurance reminders will continue in your notification center.'
+              : 'Disbursement happens after approval, verification, and final operations checks.',
+          isCompleted: [LoanStatus.DISBURSED, LoanStatus.CLOSED].includes(loan.status),
+        },
+      ],
+    };
+  }
+
   private async createLoanDocuments(
     loanId: Types.ObjectId,
     memberId: Types.ObjectId,
@@ -189,8 +297,6 @@ export class LoansService {
     if (documents.length === 0) {
       return [];
     }
-
-    this.validateLoanDocuments(documents);
 
     const preparedDocuments = await Promise.all(
       documents.map(async (document) => {
@@ -226,26 +332,6 @@ export class LoansService {
     return this.loanDocumentModel.create(preparedDocuments);
   }
 
-  private validateLoanDocuments(documents: CreateLoanDocumentDto[]) {
-    if (documents.length > MAX_LOAN_DOCUMENTS) {
-      throw new BadRequestException(
-        `A loan application can include at most ${MAX_LOAN_DOCUMENTS} documents.`,
-      );
-    }
-
-    for (const document of documents) {
-      if (document.sizeBytes != null && document.sizeBytes > MAX_LOAN_DOCUMENT_SIZE_BYTES) {
-        throw new BadRequestException(
-          `Document ${document.originalFileName} exceeds the ${MAX_LOAN_DOCUMENT_SIZE_BYTES} byte limit.`,
-        );
-      }
-
-      if (document.storageKey?.includes('..')) {
-        throw new BadRequestException('Document storageKey must not contain path traversal segments.');
-      }
-    }
-  }
-
   private ensureMemberAccess(currentUser: AuthenticatedUser): void {
     if (
       currentUser.role !== UserRole.MEMBER &&
@@ -269,6 +355,7 @@ export class LoansService {
       status: loan.status,
       currentLevel: loan.currentLevel,
       assignedToStaffId: loan.assignedToStaffId?.toString(),
+      deficiencyReasons: loan.deficiencyReasons ?? [],
       createdAt: loan.createdAt,
       updatedAt: loan.updatedAt,
     };

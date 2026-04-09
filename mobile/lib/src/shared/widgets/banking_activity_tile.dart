@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
+import '../../../../theme/amhara_brand_theme.dart';
 
 class BankingActivityTile extends StatelessWidget {
   const BankingActivityTile({
@@ -34,10 +34,10 @@ class BankingActivityTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: cbeBlue.withValues(alpha: 0.08)),
+          border: Border.all(color: abayPrimary.withValues(alpha: 0.08)),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x12000000),
+              color: abayShadow,
               blurRadius: 12,
               offset: Offset(0, 6),
             ),
@@ -50,10 +50,10 @@ class BankingActivityTile extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: const Color(0xFFE9F1FF),
+                color: abayPrimarySoft,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: cbeBlue),
+              child: Icon(icon, color: abayPrimary),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -76,7 +76,7 @@ class BankingActivityTile extends StatelessWidget {
                       Text(
                         trailingLabel,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: cbeBlue,
+                              color: abayPrimary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
@@ -86,7 +86,7 @@ class BankingActivityTile extends StatelessWidget {
                   Text(
                     dateLabel,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF6B7280),
+                          color: abayTextSoft,
                         ),
                   ),
                   const SizedBox(height: 8),
@@ -99,13 +99,13 @@ class BankingActivityTile extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: (badgeColor ?? cbeBlue).withValues(alpha: 0.12),
+                        color: (badgeColor ?? abayPrimary).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         badgeLabel!,
                         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: badgeColor ?? cbeBlue,
+                              color: badgeColor ?? abayPrimary,
                               fontWeight: FontWeight.w700,
                             ),
                       ),

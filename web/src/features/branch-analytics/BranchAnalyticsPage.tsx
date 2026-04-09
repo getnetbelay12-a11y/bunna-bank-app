@@ -36,14 +36,14 @@ export function BranchAnalyticsPage({ session }: BranchAnalyticsPageProps) {
         description="Compare customer service volume, loan approvals, and payment throughput by branch."
       >
         <TrendBars
-          items={
-            items.length > 0
-              ? items.map((item) => ({
-                  label: formatScopeLabel(item.scopeId),
-                  value: item.customersServed,
-                }))
-              : [{ label: 'Loading', value: 0 }]
-          }
+          items={items.map((item) => ({
+            label: formatScopeLabel(item.scopeId),
+            value: item.customersServed,
+          }))}
+          emptyState={{
+            title: 'No branch trend data',
+            description: 'Branch service and throughput trends will appear here when analytics data is available.',
+          }}
         />
       </Panel>
 
@@ -53,17 +53,17 @@ export function BranchAnalyticsPage({ session }: BranchAnalyticsPageProps) {
       >
         <SimpleTable
           headers={['Branch', 'Customers', 'Transactions', 'Approvals', 'Volume']}
-          rows={
-            items.length > 0
-              ? items.map((item) => [
-                  formatScopeLabel(item.scopeId),
-                  String(item.customersServed),
-                  String(item.transactionsCount),
-                  String(item.loanApprovedCount),
-                  `ETB ${item.totalTransactionAmount.toLocaleString()}`,
-                ])
-              : [['Loading', '...', '...', '...', '...']]
-          }
+          rows={items.map((item) => [
+            formatScopeLabel(item.scopeId),
+            String(item.customersServed),
+            String(item.transactionsCount),
+            String(item.loanApprovedCount),
+            `ETB ${item.totalTransactionAmount.toLocaleString()}`,
+          ])}
+          emptyState={{
+            title: 'No branch performance records',
+            description: 'Branch performance rows will appear here when data is available for the selected scope.',
+          }}
         />
       </Panel>
     </div>

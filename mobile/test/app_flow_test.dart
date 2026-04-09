@@ -1,8 +1,8 @@
-import 'package:cbe_bank_mobile/src/app/app_controller.dart';
-import 'package:cbe_bank_mobile/src/app/app_scope.dart';
-import 'package:cbe_bank_mobile/src/core/services/app_services.dart';
-import 'package:cbe_bank_mobile/src/core/services/demo_bank_api.dart';
-import 'package:cbe_bank_mobile/src/features/auth/presentation/login_screen.dart';
+import 'package:bunna_bank_mobile/src/app/app_controller.dart';
+import 'package:bunna_bank_mobile/src/app/app_scope.dart';
+import 'package:bunna_bank_mobile/src/core/services/app_services.dart';
+import 'package:bunna_bank_mobile/src/core/services/demo_bank_api.dart';
+import 'package:bunna_bank_mobile/src/features/auth/presentation/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,9 +29,11 @@ void main() {
     );
 
     await tester.enterText(find.byType(TextField).first, '0911000001');
+    await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'Continue'));
     await tester.tap(find.widgetWithText(ElevatedButton, 'Continue'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '1234');
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Sign In'));
     await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -52,9 +54,11 @@ void main() {
     );
 
     await tester.enterText(find.byType(TextField).first, '0911000002');
+    await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'Continue'));
     await tester.tap(find.widgetWithText(ElevatedButton, 'Continue'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '1234');
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Sign In'));
     await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -69,8 +73,20 @@ void main() {
 
     final notifications = await api.fetchMyNotifications();
 
-    expect(notifications, hasLength(3));
-    expect(notifications.first.title, 'Loan Update');
-    expect(notifications.last.title, 'Support Reply');
+    expect(notifications, hasLength(7));
+    expect(notifications.first.title, 'Login Detected');
+    expect(
+      notifications.any((item) => item.title == 'Card Request Under Review'),
+      isTrue,
+    );
+    expect(
+      notifications.any((item) => item.title == 'Payment Dispute Needs Action'),
+      isTrue,
+    );
+    expect(
+      notifications.any((item) => item.title == 'QR Receipt Ready'),
+      isTrue,
+    );
+    expect(notifications.last.title, 'QR Receipt Ready');
   });
 }

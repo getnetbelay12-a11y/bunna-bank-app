@@ -13,6 +13,7 @@ export interface LoanDetail {
   status: LoanStatus;
   currentLevel: LoanWorkflowLevel;
   assignedToStaffId?: string;
+  deficiencyReasons: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -21,6 +21,11 @@ export class CreateChatConversationDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  loanId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   @MaxLength(1500)
   initialMessage?: string;
 }

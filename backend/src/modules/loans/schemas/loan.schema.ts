@@ -40,6 +40,9 @@ export class Loan {
   @Prop({ type: Types.ObjectId, ref: 'Staff', index: true })
   assignedToStaffId?: Types.ObjectId;
 
+  @Prop({ type: [String], default: [] })
+  deficiencyReasons!: string[];
+
   createdAt?: Date;
 
   updatedAt?: Date;

@@ -15,6 +15,16 @@ export function KpiCard({
   trendTone = 'positive',
   sparkline,
 }: KpiCardProps) {
+  const variantClass =
+    title === 'Customers'
+      ? 'kpi-card-customers'
+      : title === 'Savings'
+        ? 'kpi-card-savings'
+        : title === 'Active loans'
+          ? 'kpi-card-loans'
+          : title === 'Pending approvals'
+            ? 'kpi-card-approvals'
+            : '';
   const bars = sparkline?.length
     ? sparkline
     : [3, 5, 4, 6, 7, 5, 8];
@@ -22,7 +32,7 @@ export function KpiCard({
   const maxValue = Math.max(...bars, 1);
 
   return (
-    <article className="panel kpi-card">
+    <article className={`panel kpi-card ${variantClass}`.trim()}>
       <div className="kpi-card-header">
         <p className="eyebrow">{title}</p>
         {trend ? <span className={`kpi-trend ${trendTone}`}>{trend}</span> : null}

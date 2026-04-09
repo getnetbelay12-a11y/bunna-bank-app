@@ -1,112 +1,61 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../../theme/cbe_bank_theme.dart';
-import '../core/services/api_config.dart';
 import '../core/services/app_services.dart';
+import '../core/models/member_session.dart';
+import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/create_account_screen.dart';
+import '../features/auth/presentation/forgot_pin_recovery_screen.dart';
+import '../features/auth/presentation/reset_pin_screen.dart';
 import '../features/auth/presentation/enter_pin_screen.dart';
 import '../features/auth/presentation/kyc_onboarding_screen.dart';
-import '../features/auth/presentation/login_screen.dart';
-import '../features/auth/presentation/otp_verification_screen.dart';
 import '../features/navigation/presentation/member_shell.dart';
+import '../features/auth/presentation/otp_verification_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import 'app_controller.dart';
 import 'app_scope.dart';
+import '../core/services/native_push_bridge.dart';
+import '../../theme/amhara_brand_theme.dart';
 
-class CbeBankApp extends StatefulWidget {
-  const CbeBankApp({super.key});
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
-  @override
-  State<CbeBankApp> createState() => _CbeBankAppState();
-}
+class BunnaBankApp extends StatelessWidget {
+  const BunnaBankApp({
+    super.key,
+    this.services,
+  });
 
-class _CbeBankAppState extends State<CbeBankApp> {
-  AppController? _controller;
-  Object? _startupError;
-
-  @override
-  void initState() {
-    super.initState();
-    try {
-      _controller = AppController(services: AppServices.create());
-    } catch (error) {
-      _startupError = error;
-    }
-  }
+  final AppServices? services;
 
   @override
   Widget build(BuildContext context) {
-    if (_startupError != null) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Bunna Bank',
-        theme: cbeBankTheme,
-        home: _ConfigurationErrorScreen(error: _startupError!),
-      );
-    }
-
-    final controller = _controller!;
+    final controller = AppController(services: services ?? AppServices.create());
 
     return AppScope(
       controller: controller,
       child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'Bunna Bank',
-        theme: cbeBankTheme,
+        theme: amharaBrandTheme,
         home: _StartupGate(controller: controller),
         routes: {
           LoginScreen.routeName: (_) => const LoginScreen(),
           CreateAccountScreen.routeName: (_) => const CreateAccountScreen(),
           EnterPinScreen.routeName: (_) => const EnterPinScreen(
-              challengeId: 'demo', identifier: '0911000001'),
-          OtpVerificationScreen.routeName: (_) =>
-              const OtpVerificationScreen(phoneNumber: '0911000001'),
+              challengeId: 'demo', identifier: 'BUN-100001'),
+          OtpVerificationScreen.routeName: (_) => const OtpVerificationScreen(
+              phoneNumber: '0911000001',
+              deliveryChannel: 'sms',
+              maskedDestination: '09******01'),
+          ForgotPinRecoveryScreen.routeName: (_) =>
+              const ForgotPinRecoveryScreen(),
+          ResetPinScreen.routeName: (_) =>
+              const ResetPinScreen(phoneNumber: '0911000001'),
           KycOnboardingScreen.routeName: (_) =>
               const KycOnboardingScreen(phoneNumber: '0911000001'),
         },
-      ),
-    );
-  }
-}
-
-class _ConfigurationErrorScreen extends StatelessWidget {
-  const _ConfigurationErrorScreen({
-    required this.error,
-  });
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) {
-    const guidance = ApiConfig.demoModeEnabled
-        ? 'Set API_BASE_URL to use the backend, or keep APP_DEMO_MODE enabled for local preview builds.'
-        : 'Set API_BASE_URL with --dart-define before building this release.';
-
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Bunna Bank configuration required',
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '$error',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                guidance,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -129,6 +78,14 @@ class _StartupGateState extends State<_StartupGate> {
   @override
   void initState() {
     super.initState();
+    unawaited(_initializeSession());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NativePushBridge.initialize(
+        navigatorKey: rootNavigatorKey,
+        notificationApi: widget.controller.services.notificationApi,
+        onPushTokenUpdated: widget.controller.registerNativePushToken,
+      );
+    });
     Future<void>.delayed(const Duration(milliseconds: 1200), () {
       if (!mounted) {
         return;
@@ -138,6 +95,41 @@ class _StartupGateState extends State<_StartupGate> {
         _ready = true;
       });
     });
+  }
+
+  Future<void> _initializeSession() async {
+    _applyPreviewSession();
+    await widget.controller.restoreSession();
+  }
+
+  void _applyPreviewSession() {
+    final preview = Uri.base.queryParameters['preview'];
+
+    if (preview != 'customer') {
+      return;
+    }
+
+    widget.controller.setPreviewSession(
+      const MemberSession(
+        memberId: 'meseret-alemu',
+        customerId: 'BUN-100003',
+        fullName: 'Meseret Alemu',
+        phone: '0911000002',
+        memberType: MemberType.member,
+        branchName: 'Gondar Branch',
+        membershipStatus: 'pending_verification',
+        identityVerificationStatus: 'manual_review_required',
+        featureFlags: MemberFeatureFlags.defaults(
+          voting: false,
+          announcements: false,
+          dividends: false,
+          schoolPayment: true,
+          loans: true,
+          savings: true,
+          liveChat: true,
+        ),
+      ),
+    );
   }
 
   @override

@@ -15,8 +15,10 @@ const services = [
     name: 'web',
     cwd: path.join(root, 'web'),
     cmd: 'npm',
-    args: ['run', 'dev'],
-    env: {},
+    args: ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5175'],
+    env: {
+      VITE_API_BASE_URL: 'http://127.0.0.1:4008',
+    },
   },
   {
     name: 'mobile',
@@ -26,7 +28,7 @@ const services = [
       'run',
       '-d',
       '0580DD06-7073-4FC6-AD41-B5860BFEDA62',
-      '--dart-define=API_BASE_URL=http://127.0.0.1:4000',
+      '--dart-define=API_BASE_URL=http://127.0.0.1:4008',
     ],
     env: {},
   },
@@ -87,6 +89,6 @@ for (const service of services) {
 }
 
 console.log('Starting Bunna Bank local stack...');
-console.log('Backend: http://127.0.0.1:4000');
-console.log('Web: http://localhost:5174');
+console.log('Backend: http://127.0.0.1:4008');
+console.log('Web: http://localhost:5175');
 console.log('Mobile target: iPhone 17 Pro simulator');

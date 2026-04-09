@@ -3,7 +3,7 @@
 ## Stack
 - NestJS
 - Mongoose
-- MongoDB database: `cbe_bank_app`
+- MongoDB database: `bunna_bank_app`
 - JWT authentication
 - DTO validation with `class-validator`
 
@@ -70,6 +70,6 @@ Environment validation is handled in:
 {
   "status": "ok",
   "database": "connected",
-  "databaseName": "cbe_bank_app"
+  "databaseName": "bunna_bank_app"
 }
 ```

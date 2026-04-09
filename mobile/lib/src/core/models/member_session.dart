@@ -1,6 +1,8 @@
 class MemberFeatureFlags {
   const MemberFeatureFlags({
     required this.voting,
+    required this.announcements,
+    required this.dividends,
     required this.schoolPayment,
     required this.loans,
     required this.savings,
@@ -9,6 +11,8 @@ class MemberFeatureFlags {
 
   const MemberFeatureFlags.defaults({
     this.voting = false,
+    this.announcements = false,
+    this.dividends = false,
     this.schoolPayment = true,
     this.loans = true,
     this.savings = true,
@@ -16,6 +20,8 @@ class MemberFeatureFlags {
   });
 
   final bool voting;
+  final bool announcements;
+  final bool dividends;
   final bool schoolPayment;
   final bool loans;
   final bool savings;
@@ -51,5 +57,6 @@ class MemberSession {
   final MemberFeatureFlags featureFlags;
 
   bool get canVote => featureFlags.voting;
+  bool get isShareholder => memberType == MemberType.shareholder;
   bool get canUseLiveChat => featureFlags.liveChat;
 }

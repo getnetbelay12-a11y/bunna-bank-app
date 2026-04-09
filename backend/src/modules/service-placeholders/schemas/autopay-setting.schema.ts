@@ -19,6 +19,9 @@ export class AutopaySetting {
 
   @Prop({ default: true, index: true })
   enabled!: boolean;
+
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const AutopaySettingSchema = SchemaFactory.createForClass(AutopaySetting);

@@ -1,7 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-import { NotificationStatus, NotificationType, UserRole } from '../../../common/enums';
+import {
+  NotificationChannel,
+  NotificationStatus,
+  NotificationType,
+  UserRole,
+} from '../../../common/enums';
 
 export type NotificationDocument = HydratedDocument<Notification>;
 
@@ -18,6 +23,14 @@ export class Notification {
 
   @Prop({ required: true, enum: NotificationType, index: true })
   type!: NotificationType;
+
+  @Prop({
+    required: true,
+    enum: NotificationChannel,
+    index: true,
+    default: NotificationChannel.MOBILE_PUSH,
+  })
+  channel!: NotificationChannel;
 
   @Prop({
     required: true,
@@ -38,8 +51,23 @@ export class Notification {
   @Prop({ type: Types.ObjectId, index: true })
   entityId?: Types.ObjectId;
 
+  @Prop({ trim: true })
+  actionLabel?: string;
+
+  @Prop({ trim: true, index: true })
+  priority?: string;
+
+  @Prop({ trim: true })
+  deepLink?: string;
+
+  @Prop({ type: Object })
+  dataPayload?: Record<string, unknown>;
+
   @Prop()
   readAt?: Date;
+
+  @Prop()
+  deliveredAt?: Date;
 
   createdAt?: Date;
 

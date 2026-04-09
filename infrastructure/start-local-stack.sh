@@ -6,9 +6,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 WEB_DIR="$ROOT_DIR/web"
 
-BACKEND_PORT="${BACKEND_PORT:-4000}"
-WEB_PORT="${WEB_PORT:-5173}"
-MONGODB_URI="${MONGODB_URI:-mongodb://localhost:27017/cbe_bank_app}"
+BACKEND_PORT="${BACKEND_PORT:-4008}"
+WEB_PORT="${WEB_PORT:-5175}"
+MONGODB_URI="${MONGODB_URI:-mongodb://localhost:27017/bunna_bank_app}"
 WEB_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
 
 SEED_DATA="false"
@@ -24,8 +24,8 @@ Options:
   --help   Show this help message
 
 Environment:
-  BACKEND_PORT       Backend port (default: 4000)
-  WEB_PORT           Web port (default: 5173)
+  BACKEND_PORT       Backend port (default: 4008)
+  WEB_PORT           Web port (default: 5175)
   MONGODB_URI        MongoDB connection string
   VITE_API_BASE_URL  Web API base URL (default: http://localhost:\${BACKEND_PORT})
 

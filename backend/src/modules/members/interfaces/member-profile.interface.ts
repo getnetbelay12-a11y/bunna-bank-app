@@ -11,6 +11,16 @@ export interface MemberProfile {
   lastName?: string;
   phone: string;
   email?: string;
+  telegramChatId?: string;
+  telegramUserId?: string;
+  telegramUsername?: string;
+  telegramFirstName?: string;
+  telegramLastName?: string;
+  telegramSubscribed?: boolean;
+  telegramLinkedAt?: Date;
+  telegramLastMessageAt?: Date;
+  optInLoanReminders?: boolean;
+  optInInsuranceReminders?: boolean;
   branchId: string;
   branchName?: string;
   districtId: string;
@@ -18,6 +28,8 @@ export interface MemberProfile {
   shareBalance: number;
   membershipStatus?: string;
   identityVerificationStatus?: string;
+  onboardingReviewStatus?: string;
+  onboardingReviewNote?: string;
   isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;

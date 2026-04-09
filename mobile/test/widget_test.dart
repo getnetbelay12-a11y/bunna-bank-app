@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cbe_bank_mobile/src/app/app.dart';
+import 'package:bunna_bank_mobile/src/app/app.dart';
 
 void main() {
   testWidgets('shows branded splash before the login screen', (tester) async {
-    await tester.pumpWidget(const CbeBankApp());
+    await tester.pumpWidget(const BunnaBankApp());
 
-    expect(find.text('CBE Bank'), findsOneWidget);
+    expect(find.text('Bunna Bank'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 1300));
     await tester.pumpAndSettle();

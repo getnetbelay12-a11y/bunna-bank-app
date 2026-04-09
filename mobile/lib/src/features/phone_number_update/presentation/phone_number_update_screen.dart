@@ -1,14 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/app_scope.dart';
-import '../../../core/services/api_config.dart';
 
 class PhoneNumberUpdateScreen extends StatefulWidget {
   const PhoneNumberUpdateScreen({super.key});
@@ -139,53 +136,68 @@ class _PhoneNumberUpdateScreenState extends State<PhoneNumberUpdateScreen> {
       );
       return;
     }
-    if (!ApiConfig.hasBaseUrl) {
-      setState(() {
-        _message = 'API_BASE_URL is not configured. Request was not sent.';
-      });
-      return;
-    }
-
     setState(() {
       _submitting = true;
       _message = null;
     });
-    final token = AppScope.of(context).services.sessionStore.accessToken;
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/profile/update-phone'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'phoneNumber': _phoneController.text.trim(),
-        'faydaFrontImage': _frontUpload!.path,
-        'faydaBackImage': _backUpload!.path,
-        'selfieImage': _selfieUpload!.path,
-      }),
-    );
+    final services = AppScope.of(context).services;
+    try {
+      final frontUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _frontUpload!.path,
+        originalFileName: _frontUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'fayda_front',
+      );
+      final backUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _backUpload!.path,
+        originalFileName: _backUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'fayda_back',
+      );
+      final selfieUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _selfieUpload!.path,
+        originalFileName: _selfieUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'selfie',
+      );
+      final created = await services.serviceRequestApi.createRequest(
+        type: 'phone_update',
+        title: 'Phone number update request',
+        description:
+            'Request to update member phone number after identity verification.',
+        payload: {
+          'phoneNumber': _phoneController.text.trim(),
+          'faydaFrontImage': frontUpload.storageKey,
+          'faydaBackImage': backUpload.storageKey,
+          'selfieImage': selfieUpload.storageKey,
+        },
+        attachments: [
+          frontUpload.storageKey,
+          backUpload.storageKey,
+          selfieUpload.storageKey,
+        ],
+      );
 
-    if (!mounted) {
-      return;
-    }
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _submitting = false;
         _message =
-            'Phone update request submitted. Review status: ${data['status'] ?? 'pending_review'}';
+            'Phone update request submitted. Request ID: ${created.id} · Status: ${created.status}';
       });
-      return;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _submitting = false;
+        _message = error.toString().replaceFirst('Exception: ', '');
+      });
     }
-
-    setState(() {
-      _submitting = false;
-      _message = _extractErrorMessage(
-        response.body,
-        fallback: 'Unable to submit phone update request.',
-      );
-    });
   }
 
   Future<void> _selectDocumentUpload({
@@ -308,18 +320,6 @@ class _PhoneNumberUpdateScreenState extends State<PhoneNumberUpdateScreen> {
       path: file.path ?? file.name,
       kind: 'file',
     );
-  }
-
-  String _extractErrorMessage(String body, {required String fallback}) {
-    try {
-      final data = jsonDecode(body);
-      if (data is Map<String, dynamic> && data['message'] is String) {
-        return data['message'] as String;
-      }
-    } catch (_) {
-      // Ignore.
-    }
-    return fallback;
   }
 }
 

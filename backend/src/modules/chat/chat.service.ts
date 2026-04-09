@@ -6,10 +6,19 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import { NotificationType, UserRole } from '../../common/enums';
+import {
+  LoanWorkflowLevel,
+  NotificationType,
+  UserRole,
+} from '../../common/enums';
 import { AuthenticatedUser } from '../auth/interfaces';
 import { AuditService } from '../audit/audit.service';
-import { CreateAuditLogDto } from '../audit/dto';
+import {
+  buildSupportAssignmentNotification,
+  buildSupportReplyNotification,
+  buildSupportResolvedNotification,
+  buildSupportStaffMessageNotification,
+} from '../notifications/banking-notification-builders';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateChatConversationDto, CreateChatMessageDto } from './dto';
 import {
@@ -17,6 +26,7 @@ import {
   ChatConversationResult,
   ChatMessageResult,
 } from './interfaces';
+import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
 import {
   ChatAssignment,
   ChatAssignmentDocument,
@@ -40,6 +50,8 @@ export class ChatService {
   constructor(
     @InjectModel(ChatConversation.name)
     private readonly conversationModel: Model<ChatConversationDocument>,
+    @InjectModel(Loan.name)
+    private readonly loanModel: Model<LoanDocument>,
     @InjectModel(ChatMessage.name)
     private readonly messageModel: Model<ChatMessageDocument>,
     @InjectModel(ChatParticipant.name)
@@ -56,19 +68,31 @@ export class ChatService {
     currentUser: AuthenticatedUser,
     dto: CreateChatConversationDto,
   ): Promise<ChatConversationDetailResult> {
+    const loanRouting = await this.resolveLoanRouting(currentUser, dto);
+
+    if (loanRouting.loanId) {
+      const existingConversation = await this.conversationModel.findOne({
+        memberId: new Types.ObjectId(currentUser.memberId ?? currentUser.sub),
+        loanId: loanRouting.loanId,
+        status: { $in: ['open', 'assigned', 'waiting_customer', 'waiting_agent'] },
+      });
+
+      if (existingConversation) {
+        return this.getConversationDetailByDocument(existingConversation);
+      }
+    }
+
     const conversation = await this.conversationModel.create({
       memberId: new Types.ObjectId(currentUser.memberId ?? currentUser.sub),
       memberName: currentUser.fullName ?? currentUser.phone ?? 'Member',
       phoneNumber: currentUser.phone ?? '',
       memberType: currentUser.memberType,
-      branchId: currentUser.branchId
-        ? new Types.ObjectId(currentUser.branchId)
-        : undefined,
-      branchName: currentUser.branchName,
-      districtId: currentUser.districtId
-        ? new Types.ObjectId(currentUser.districtId)
-        : undefined,
-      districtName: currentUser.districtName,
+      branchId: loanRouting.branchId,
+      branchName: loanRouting.branchName,
+      districtId: loanRouting.districtId,
+      districtName: loanRouting.districtName,
+      loanId: loanRouting.loanId,
+      routingLevel: loanRouting.routingLevel,
       status: dto.initialMessage?.trim().length ? 'waiting_agent' : 'open',
       channel: 'mobile',
       category: dto.issueCategory,
@@ -111,7 +135,7 @@ export class ChatService {
         conversationId: conversation._id,
         senderType: 'system',
         senderId: 'smart-support-assistant',
-        senderName: 'CBE Bank Assistant',
+        senderName: 'Bunna Bank Assistant',
         message: this.buildBotResponse(dto.issueCategory),
         messageType: 'system',
       }),
@@ -122,7 +146,7 @@ export class ChatService {
       toStatus: conversation.status,
       changedByType: 'system',
       changedById: 'smart-support-assistant',
-      note: `Conversation created for ${dto.issueCategory}.`,
+      note: `Conversation created for ${dto.issueCategory}${loanRouting.loanId ? ' with loan routing.' : '.'}`,
     });
 
     return this.toConversationDetail(conversation, createdMessages);
@@ -191,12 +215,13 @@ export class ChatService {
     await conversation.save();
 
     if (conversation.assignedToStaffId) {
+      const notification = buildSupportStaffMessageNotification(dto.message.trim());
       await this.notificationsService.createNotification({
         userType: 'staff',
         userId: conversation.assignedToStaffId.toString(),
-        type: NotificationType.CHAT,
-        title: 'Customer sent a support message',
-        message: dto.message.trim(),
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
         entityType: ChatConversation.name,
         entityId: conversation._id.toString(),
       });
@@ -334,14 +359,18 @@ export class ChatService {
 
     await this.logStatusChange(conversation, 'assigned', 'agent', currentUser.sub);
     await this.logAudit(currentUser, 'chat_assignment', conversation);
+    const notification = buildSupportAssignmentNotification();
     await this.notificationsService.createNotification({
       userType: 'member',
       userId: conversation.memberId.toString(),
-      type: NotificationType.CHAT,
-      title: 'Your support case has been assigned',
-      message: 'An CBE Bank support agent is now handling your request.',
+      type: NotificationType.SUPPORT_ASSIGNED,
+      title: notification.title,
+      message: notification.message,
       entityType: ChatConversation.name,
       entityId: conversation._id.toString(),
+      actionLabel: 'Open support',
+      priority: 'normal',
+      deepLink: `/support/${conversation._id.toString()}`,
     });
 
     return this.getConversationDetailByDocument(conversation);
@@ -383,14 +412,18 @@ export class ChatService {
       messageType: 'text',
     });
 
+    const notification = buildSupportReplyNotification(dto.message.trim());
     await this.notificationsService.createNotification({
       userType: 'member',
       userId: conversation.memberId.toString(),
-      type: NotificationType.CHAT,
-      title: 'Support replied to your message',
-      message: dto.message.trim(),
+      type: NotificationType.SUPPORT_REPLY,
+      title: notification.title,
+      message: notification.message,
       entityType: ChatConversation.name,
       entityId: conversation._id.toString(),
+      actionLabel: 'Open support',
+      priority: 'high',
+      deepLink: `/support/${conversation._id.toString()}`,
     });
 
     await this.logAudit(currentUser, 'chat_agent_reply', conversation);
@@ -457,14 +490,18 @@ export class ChatService {
     await this.logAudit(currentUser, `chat_${nextStatus}`, conversation);
 
     if (nextStatus === 'resolved') {
+      const notification = buildSupportResolvedNotification();
       await this.notificationsService.createNotification({
         userType: 'member',
         userId: conversation.memberId.toString(),
-        type: NotificationType.CHAT,
-        title: 'Your support conversation was resolved',
-        message: 'Support marked your current conversation as resolved.',
+        type: NotificationType.SUPPORT_REPLY,
+        title: notification.title,
+        message: notification.message,
         entityType: ChatConversation.name,
         entityId: conversation._id.toString(),
+        actionLabel: 'Review support',
+        priority: 'normal',
+        deepLink: `/support/${conversation._id.toString()}`,
       });
     }
 
@@ -538,11 +575,14 @@ export class ChatService {
     conversation: ChatConversationDocument | (ChatConversationDocument & { id?: string }),
     latestMessage?: ChatMessageResult | null,
   ): ChatConversationResult {
+    const responseDueAt = this.resolveResponseDueAt(conversation);
     return {
       id: conversation.id ?? conversation._id.toString(),
       conversationId: conversation.id ?? conversation._id.toString(),
       memberId: conversation.memberId.toString(),
       customerId: conversation.memberId.toString(),
+      loanId: conversation.loanId?.toString(),
+      routingLevel: conversation.routingLevel,
       memberName: conversation.memberName,
       phoneNumber: conversation.phoneNumber,
       memberType: conversation.memberType,
@@ -559,6 +599,8 @@ export class ChatService {
       issueCategory: conversation.category,
       priority: conversation.priority,
       escalationFlag: conversation.escalationFlag,
+      responseDueAt,
+      slaState: this.resolveSlaState(conversation, responseDueAt),
       lastMessageAt: conversation.lastMessageAt,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
@@ -593,7 +635,7 @@ export class ChatService {
       case 'kyc_issue':
         return 'I can help with KYC review, Fayda submissions, and verification follow-up.';
       default:
-        return 'Welcome to CBE Bank support. Please describe your issue and I will guide you or hand off to an agent.';
+        return 'Welcome to Bunna Bank support. Please describe your issue and I will guide you or hand off to an agent.';
     }
   }
 
@@ -623,7 +665,7 @@ export class ChatService {
     actionType: string,
     conversation: ChatConversationDocument,
   ) {
-    const dto: CreateAuditLogDto = {
+    await this.auditService.logActorAction({
       actorId: currentUser.sub,
       actorRole: currentUser.role,
       actionType,
@@ -634,9 +676,7 @@ export class ChatService {
         status: conversation.status,
         assignedToStaffId: conversation.assignedToStaffId?.toString(),
       },
-    };
-
-    await this.auditService.log(dto);
+    });
   }
 
   private resolvePriority(category: string): 'low' | 'normal' | 'high' {
@@ -649,14 +689,64 @@ export class ChatService {
     return 'low';
   }
 
+  private resolveResponseDueAt(
+    conversation:
+      | ChatConversationDocument
+      | (ChatConversationDocument & { id?: string }),
+  ) {
+    const baseline =
+      conversation.lastMessageAt ?? conversation.updatedAt ?? conversation.createdAt;
+    if (!baseline) {
+      return undefined;
+    }
+
+    const minutes =
+      conversation.priority === 'high'
+        ? 20
+        : conversation.priority === 'normal'
+          ? 45
+          : 90;
+
+    return new Date(baseline.getTime() + minutes * 60_000);
+  }
+
+  private resolveSlaState(
+    conversation:
+      | ChatConversationDocument
+      | (ChatConversationDocument & { id?: string }),
+    responseDueAt?: Date,
+  ): 'on_track' | 'attention' | 'breached' {
+    if (
+      conversation.status === 'resolved' ||
+      conversation.status === 'closed' ||
+      !responseDueAt
+    ) {
+      return 'on_track';
+    }
+
+    const dueAt = responseDueAt.getTime();
+    const now = Date.now();
+
+    if (dueAt <= now) {
+      return 'breached';
+    }
+
+    if (conversation.escalationFlag || dueAt - now <= 15 * 60_000) {
+      return 'attention';
+    }
+
+    return 'on_track';
+  }
+
   private assertSupportConversationAccess(
     currentUser: AuthenticatedUser,
     conversation: ChatConversationDocument,
   ) {
     if (
       currentUser.role === UserRole.BRANCH_MANAGER &&
-      currentUser.branchId &&
-      conversation.branchId?.toString() !== currentUser.branchId
+      (!['general', 'branch'].includes(conversation.routingLevel) ||
+          !currentUser.branchId ||
+          conversation.branchId?.toString() !== currentUser.branchId)
     ) {
       throw new ForbiddenException(
         'This support conversation is outside your branch scope.',
@@ -665,8 +755,9 @@ export class ChatService {
 
     if (
       [UserRole.DISTRICT_MANAGER, UserRole.DISTRICT_OFFICER].includes(currentUser.role) &&
-      currentUser.districtId &&
-      conversation.districtId?.toString() !== currentUser.districtId
+      (!['general', 'district'].includes(conversation.routingLevel) ||
+          !currentUser.districtId ||
+          conversation.districtId?.toString() !== currentUser.districtId)
     ) {
       throw new ForbiddenException(
         'This support conversation is outside your district scope.',
@@ -691,16 +782,86 @@ export class ChatService {
 
   private buildSupportConversationScope(currentUser: AuthenticatedUser) {
     if (currentUser.role === UserRole.BRANCH_MANAGER && currentUser.branchId) {
-      return { branchId: new Types.ObjectId(currentUser.branchId) };
+      return {
+        branchId: new Types.ObjectId(currentUser.branchId),
+        routingLevel: { $in: ['general', 'branch'] },
+      };
     }
 
     if (
       [UserRole.DISTRICT_MANAGER, UserRole.DISTRICT_OFFICER].includes(currentUser.role) &&
       currentUser.districtId
     ) {
-      return { districtId: new Types.ObjectId(currentUser.districtId) };
+      return {
+        districtId: new Types.ObjectId(currentUser.districtId),
+        routingLevel: { $in: ['general', 'district'] },
+      };
     }
 
     return {};
+  }
+
+  private async resolveLoanRouting(
+    currentUser: AuthenticatedUser,
+    dto: CreateChatConversationDto,
+  ): Promise<{
+    loanId?: Types.ObjectId;
+    branchId?: Types.ObjectId;
+    branchName?: string;
+    districtId?: Types.ObjectId;
+    districtName?: string;
+    routingLevel: 'general' | 'branch' | 'district' | 'head_office';
+  }> {
+    if (dto.issueCategory !== 'loan_issue' || !dto.loanId) {
+      return {
+        branchId: currentUser.branchId ? new Types.ObjectId(currentUser.branchId) : undefined,
+        branchName: currentUser.branchName,
+        districtId: currentUser.districtId ? new Types.ObjectId(currentUser.districtId) : undefined,
+        districtName: currentUser.districtName,
+        routingLevel: 'general',
+      };
+    }
+
+    const loan = await this.loanModel.findById(dto.loanId).lean<LoanDocument | null>();
+
+    if (!loan || loan.memberId.toString() !== (currentUser.memberId ?? currentUser.sub)) {
+      throw new NotFoundException('Loan not found for this member.');
+    }
+
+    if (loan.currentLevel === LoanWorkflowLevel.BRANCH) {
+      return {
+        loanId: loan._id,
+        branchId: loan.branchId,
+        branchName: currentUser.branchName,
+        districtId: loan.districtId,
+        districtName: currentUser.districtName,
+        routingLevel: 'branch',
+      };
+    }
+
+    if (loan.currentLevel === LoanWorkflowLevel.DISTRICT) {
+      return {
+        loanId: loan._id,
+        districtId: loan.districtId,
+        districtName: currentUser.districtName,
+        routingLevel: 'district',
+      };
+    }
+
+    if (loan.currentLevel === LoanWorkflowLevel.HEAD_OFFICE) {
+      return {
+        loanId: loan._id,
+        routingLevel: 'head_office',
+      };
+    }
+
+    return {
+      loanId: loan._id,
+      branchId: loan.branchId,
+      branchName: currentUser.branchName,
+      districtId: loan.districtId,
+      districtName: currentUser.districtName,
+      routingLevel: 'branch',
+    };
   }
 }

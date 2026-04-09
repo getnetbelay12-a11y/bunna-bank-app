@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
+import { UserRole } from '../../common/enums';
 import { CreateAuditLogDto, ListAuditLogsQueryDto } from './dto';
 import { AuditLogResult } from './interfaces';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
@@ -25,6 +26,26 @@ export class AuditService {
     });
 
     return this.toResult(auditLog);
+  }
+
+  async logActorAction(input: {
+    actorId: string;
+    actorRole: UserRole;
+    actionType: string;
+    entityType: string;
+    entityId: string;
+    before?: Record<string, unknown> | null;
+    after?: Record<string, unknown> | null;
+  }): Promise<AuditLogResult> {
+    return this.log({
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+      actionType: input.actionType,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      before: input.before,
+      after: input.after,
+    });
   }
 
   async listByEntity(entityType: string, entityId: string): Promise<AuditLogResult[]> {

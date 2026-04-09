@@ -7,3 +7,9 @@ coverage/
 .env.*
 .DS_Store
 *.log
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.tsbuildinfo
+Pods/

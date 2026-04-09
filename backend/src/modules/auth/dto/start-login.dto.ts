@@ -9,6 +9,11 @@ export class StartLoginDto {
   @IsOptional()
   @IsString()
   @MaxLength(32)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
   customerId?: string;
 
   @IsOptional()

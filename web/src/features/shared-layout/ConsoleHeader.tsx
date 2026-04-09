@@ -1,7 +1,11 @@
-import { getRoleLabel, type AdminSession } from '../../core/session';
+import {
+  getSessionRoleLabel,
+  isSchoolSession,
+  type AppSession,
+} from '../../core/session';
 
 type ConsoleHeaderProps = {
-  session: AdminSession;
+  session: AppSession;
   scopeLabel: string;
   onLogout?: () => void;
 };
@@ -14,10 +18,10 @@ export function ConsoleHeader({
   return (
     <header className="console-header">
       <div>
-        <p className="eyebrow">Management Console</p>
+        <p className="eyebrow">{isSchoolSession(session) ? 'School Console' : 'Management Console'}</p>
         <h2>{session.fullName}</h2>
         <p className="muted">
-          {getRoleLabel(session.role)} · {scopeLabel}
+          {getSessionRoleLabel(session)} · {scopeLabel}
         </p>
       </div>
 

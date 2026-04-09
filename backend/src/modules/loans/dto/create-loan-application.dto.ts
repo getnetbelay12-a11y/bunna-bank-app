@@ -4,21 +4,15 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  MaxLength,
   Min,
-  ArrayMaxSize,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import {
-  CreateLoanDocumentDto,
-  MAX_LOAN_DOCUMENTS,
-} from './create-loan-document.dto';
+import { CreateLoanDocumentDto } from './create-loan-document.dto';
 
 export class CreateLoanApplicationDto {
   @IsString()
-  @MaxLength(64)
   loanType!: string;
 
   @IsNumber()
@@ -34,7 +28,6 @@ export class CreateLoanApplicationDto {
   termMonths!: number;
 
   @IsString()
-  @MaxLength(1000)
   purpose!: string;
 
   @IsOptional()
@@ -43,7 +36,6 @@ export class CreateLoanApplicationDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(MAX_LOAN_DOCUMENTS)
   @ValidateNested({ each: true })
   @Type(() => CreateLoanDocumentDto)
   documents?: CreateLoanDocumentDto[];

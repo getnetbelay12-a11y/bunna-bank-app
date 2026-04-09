@@ -1,58 +1,113 @@
 import {
+  type AttachmentMetadata,
   type AuditApi,
   type AuditLogItem,
   type AuthApi,
+  type BranchCommandCenterSummary,
+  type BulkInvoiceReminderResult,
+  type CardOperationItem,
+  type CardOperationDetail,
+  type CardOperationUpdateResult,
+  type CardOperationsApi,
+  type CreateVotePayload,
   type CreateManagerNotificationCampaignPayload,
   type DashboardApi,
+  type DistrictCommandCenterSummary,
+  type FeePlanItem,
+  type FeePlanRecord,
+  type InvoiceBatchPreviewResult,
+  type GuardianRecord,
+  type GuardianStudentLinkItem,
+  type AutopayOperationItem,
+  type HeadOfficeCommandCenterSummary,
   type InsuranceAlertItem,
+  type LoanCustomerProfile,
+  type LoanMonitoringApi,
+  type LoanQueueDetail,
+  type LoanQueueItem,
   type ManagerDashboardSummary,
   type NotificationApi,
+  type PaymentOperationsApi,
+  type PaymentActivityItem,
+  type PaymentReceiptItem,
+  type RecommendationApi,
+  type RecommendationCollection,
+  type RecommendationDashboardSummary,
   type NotificationCampaignItem,
   type NotificationCenterItem,
   type NotificationLogItem,
   type NotificationTemplateItem,
+  type OnboardingReviewItem,
   type PerformancePeriod,
   type PerformanceSummaryItem,
+  type ParentPortalApi,
+  type ParentPortalSession,
+  type ParentPortalPaymentResult,
+  type ParentStudentAccount,
+  type ParentStudentLookupItem,
   type RolePerformanceItem,
   type RolePerformanceOverview,
+  type SchoolCollectionItem,
+  type SchoolConsoleApi,
+  type SchoolConsoleOverview,
+  type InvoiceBatchGenerationResult,
+  type InvoiceReminderResult,
+  type SchoolInvoiceItem,
+  type SchoolPortfolioItem,
+  type StudentImportResult,
+  type StudentImportRowInput,
+  type StudentRegistryFilter,
+  type StudentDetail,
+  type StudentRegistryItem,
+  type ServiceRequestApi,
+  type ServiceRequestDetail,
+  type ServiceRequestListResult,
   type SupportApi,
   type SupportChatDetail,
   type SupportChatSummaryItem,
   type StaffLoginPayload,
   type StaffRankingItem,
   type VoteAdminItem,
+  type VoteResultItem,
   type VotingApi,
   type VotingSummaryItem,
 } from './contracts';
 import {
-  AdminRole,
-  isHeadOfficeConsoleRole,
-  type AdminSession,
+  applyLocalDemoDirectorRole,
+  type AppSession,
+  type AdminRole,
 } from '../session';
 import { HttpClient } from './httpClient';
 
 const ACCESS_TOKEN_KEY = 'bunna_access_token';
 const REFRESH_TOKEN_KEY = 'bunna_refresh_token';
+const LEGACY_ACCESS_TOKEN_KEY = 'bunna_access_token';
+const LEGACY_REFRESH_TOKEN_KEY = 'bunna_refresh_token';
 
 type StaffLoginResponse = {
   accessToken: string;
   refreshToken: string;
   user: {
     id: string;
-    role: AdminRole;
+    role: AdminRole | 'school_admin';
     fullName?: string;
+    identifier?: string;
+    email?: string;
     staffNumber?: string;
     branchId?: string;
     districtId?: string;
     branchName?: string;
     districtName?: string;
+    schoolId?: string;
+    schoolName?: string;
+    permissions?: string[];
   };
 };
 
 export class HttpAuthApi implements AuthApi {
   constructor(private readonly httpClient: HttpClient) {}
 
-  async login(payload: StaffLoginPayload): Promise<AdminSession> {
+  async login(payload: StaffLoginPayload): Promise<AppSession> {
     const response = await this.httpClient.request<StaffLoginResponse>(
       '/auth/staff/login',
       {
@@ -61,25 +116,57 @@ export class HttpAuthApi implements AuthApi {
       },
     );
 
-    if (!isHeadOfficeConsoleRole(response.user.role)) {
-      throw new Error(
-        'This Bunna manager console is restricted to Head Office staff only.',
-      );
-    }
-
+    window.sessionStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+    window.sessionStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
     window.sessionStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
     window.sessionStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
 
-    return {
+    if (response.user.schoolId && response.user.schoolName) {
+      return {
+        sessionType: 'school',
+        userId: response.user.id,
+        fullName:
+          response.user.fullName ?? formatIdentifierLabel(payload.identifier),
+        schoolId: response.user.schoolId,
+        schoolName: response.user.schoolName,
+        roleLabel: 'School Administrator',
+        identifier: response.user.identifier ?? payload.identifier,
+        email: response.user.email,
+        branchName: response.user.branchName,
+        permissions: response.user.permissions ?? [],
+      };
+    }
+
+    return applyLocalDemoDirectorRole({
+      sessionType: 'admin',
       userId: response.user.id,
       fullName:
         response.user.fullName ?? formatIdentifierLabel(payload.identifier),
-      role: response.user.role,
-      branchName:
-        response.user.branchName ??
-        response.user.districtName ??
-        buildScopeLabel(response.user.branchId, response.user.districtId),
-    };
+      role: response.user.role as AdminRole,
+      identifier: response.user.identifier ?? payload.identifier,
+      email: response.user.email,
+      branchId: response.user.branchId,
+      districtId: response.user.districtId,
+      branchName: response.user.branchName,
+      districtName: response.user.districtName,
+      permissions: response.user.permissions ?? [],
+    }, payload.identifier);
+  }
+
+  async checkExistingAccount(payload: {
+    phoneNumber?: string;
+    faydaFin?: string;
+    email?: string;
+  }) {
+    return this.httpClient.request<{
+      exists: boolean;
+      matchType?: 'phone' | 'fayda_fin' | 'national_id_data' | 'email';
+      message: string;
+      customerId?: string;
+    }>('/auth/check-existing-account', {
+      method: 'POST',
+      body: payload,
+    });
   }
 }
 
@@ -131,6 +218,60 @@ export class HttpDashboardApi implements DashboardApi {
       '/manager/dashboard/voting-summary',
       {
         accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getOnboardingReviewQueue(
+    _role: AdminRole,
+  ): Promise<OnboardingReviewItem[]> {
+    return this.httpClient.request<OnboardingReviewItem[]>(
+      '/manager/dashboard/onboarding-review',
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async updateOnboardingReview(
+    memberId: string,
+    payload: {
+      status: 'submitted' | 'review_in_progress' | 'needs_action' | 'approved';
+      note?: string;
+    },
+  ): Promise<OnboardingReviewItem> {
+    return this.httpClient.request<OnboardingReviewItem>(
+      `/manager/dashboard/onboarding-review/${memberId}`,
+      {
+        method: 'PATCH',
+        accessToken: getAccessToken(),
+        body: payload,
+      },
+    );
+  }
+
+  async getAutopayOperations(_role: AdminRole): Promise<AutopayOperationItem[]> {
+    return this.httpClient.request<AutopayOperationItem[]>(
+      '/manager/dashboard/autopay-operations',
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async updateAutopayOperation(
+    id: string,
+    payload: {
+      enabled: boolean;
+      note?: string;
+    },
+  ): Promise<AutopayOperationItem> {
+    return this.httpClient.request<AutopayOperationItem>(
+      `/manager/dashboard/autopay-operations/${id}`,
+      {
+        method: 'PATCH',
+        accessToken: getAccessToken(),
+        body: payload,
       },
     );
   }
@@ -216,6 +357,42 @@ export class HttpDashboardApi implements DashboardApi {
     );
   }
 
+  async getHeadOfficeCommandCenter(
+    _role: AdminRole,
+    period: PerformancePeriod = 'week',
+  ): Promise<HeadOfficeCommandCenterSummary> {
+    return this.httpClient.request<HeadOfficeCommandCenterSummary>(
+      `/manager/command-center/head-office?period=${period}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getDistrictCommandCenter(
+    _role: AdminRole,
+    period: PerformancePeriod = 'week',
+  ): Promise<DistrictCommandCenterSummary> {
+    return this.httpClient.request<DistrictCommandCenterSummary>(
+      `/manager/command-center/district?period=${period}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getBranchCommandCenter(
+    _role: AdminRole,
+    period: PerformancePeriod = 'week',
+  ): Promise<BranchCommandCenterSummary> {
+    return this.httpClient.request<BranchCommandCenterSummary>(
+      `/manager/command-center/branch?period=${period}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
   private requestPerformanceOverview(path: string) {
     return this.httpClient.request<RolePerformanceOverview>(path, {
       accessToken: getAccessToken(),
@@ -229,6 +406,58 @@ export class HttpDashboardApi implements DashboardApi {
   }
 }
 
+export class HttpLoanMonitoringApi implements LoanMonitoringApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async getPendingLoans(): Promise<LoanQueueItem[]> {
+    return this.httpClient.request<LoanQueueItem[]>('/loan-workflow/queue', {
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async getLoanDetail(loanId: string): Promise<LoanQueueDetail | null> {
+    return this.httpClient.request<LoanQueueDetail>(`/loan-workflow/queue/${loanId}`, {
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async getCustomerProfile(loanId: string): Promise<LoanCustomerProfile | null> {
+    return this.httpClient.request<LoanCustomerProfile>(
+      `/loan-workflow/queue/${loanId}/customer-profile`,
+      {
+      accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async processAction(
+    loanId: string,
+    payload: {
+      action:
+        | 'review'
+        | 'approve'
+        | 'reject'
+        | 'forward'
+        | 'return_for_correction'
+        | 'disburse'
+        | 'close';
+      comment?: string;
+      deficiencyReasons?: string[];
+    },
+  ) {
+    return this.httpClient.request<{
+      loanId: string;
+      previousStatus: string;
+      status: string;
+      currentLevel: string;
+    }>(`/loan-workflow/${loanId}/action`, {
+      method: 'PATCH',
+      accessToken: getAccessToken(),
+      body: payload,
+    });
+  }
+}
+
 export class HttpNotificationApi implements NotificationApi {
   constructor(private readonly httpClient: HttpClient) {}
 
@@ -237,8 +466,12 @@ export class HttpNotificationApi implements NotificationApi {
       Array<{
         id: string;
         type: string;
+        userId: string;
         status: string;
         title: string;
+        actionLabel?: string;
+        deepLink?: string;
+        priority?: string;
         createdAt?: string;
       }>
     >('/notifications', {
@@ -248,9 +481,13 @@ export class HttpNotificationApi implements NotificationApi {
     return result.map((item) => ({
       notificationId: item.id,
       type: item.type,
+      userId: item.userId,
       userLabel: item.title,
       status: item.status,
       sentAt: item.createdAt ?? 'n/a',
+      actionLabel: item.actionLabel,
+      deepLink: item.deepLink,
+      priority: item.priority,
     }));
   }
 
@@ -258,12 +495,12 @@ export class HttpNotificationApi implements NotificationApi {
     const result = await this.httpClient.request<
       Array<{
         _id: string;
-        category: 'loan' | 'insurance';
+        category: NotificationTemplateItem['category'];
         templateType: string;
         title: string;
         subject?: string;
         messageBody: string;
-        channelDefaults: Array<'email' | 'sms' | 'telegram' | 'in_app'>;
+        channelDefaults: Array<'mobile_push' | 'email' | 'sms' | 'telegram' | 'in_app'>;
         isActive: boolean;
       }>
     >('/manager/notifications/templates', {
@@ -286,9 +523,9 @@ export class HttpNotificationApi implements NotificationApi {
     const result = await this.httpClient.request<
       Array<{
         _id: string;
-        category: 'loan' | 'insurance';
+        category: NotificationCampaignItem['category'];
         templateType: string;
-        channels: Array<'email' | 'sms' | 'telegram' | 'in_app'>;
+        channels: Array<'mobile_push' | 'email' | 'sms' | 'telegram' | 'in_app'>;
         targetType: 'single_customer' | 'selected_customers' | 'filtered_customers';
         targetIds: string[];
         messageSubject?: string;
@@ -296,6 +533,7 @@ export class HttpNotificationApi implements NotificationApi {
         status: NotificationCampaignItem['status'];
         scheduledAt?: string;
         sentAt?: string;
+        deliverySummary?: NotificationCampaignItem['deliverySummary'];
       }>
     >('/manager/notifications/campaigns', {
       accessToken: getAccessToken(),
@@ -313,6 +551,7 @@ export class HttpNotificationApi implements NotificationApi {
       status: item.status,
       scheduledAt: item.scheduledAt,
       sentAt: item.sentAt,
+      deliverySummary: item.deliverySummary,
     }));
   }
 
@@ -321,9 +560,9 @@ export class HttpNotificationApi implements NotificationApi {
   ): Promise<NotificationCampaignItem> {
     const result = await this.httpClient.request<{
       _id: string;
-      category: 'loan' | 'insurance';
+      category: NotificationCampaignItem['category'];
       templateType: string;
-      channels: Array<'email' | 'sms' | 'telegram' | 'in_app'>;
+      channels: Array<'mobile_push' | 'email' | 'sms' | 'telegram' | 'in_app'>;
       targetType: 'single_customer' | 'selected_customers' | 'filtered_customers';
       targetIds: string[];
       messageSubject?: string;
@@ -331,6 +570,7 @@ export class HttpNotificationApi implements NotificationApi {
       status: NotificationCampaignItem['status'];
       scheduledAt?: string;
       sentAt?: string;
+      deliverySummary?: NotificationCampaignItem['deliverySummary'];
     }>('/manager/notifications/campaigns', {
       method: 'POST',
       body: payload,
@@ -349,15 +589,16 @@ export class HttpNotificationApi implements NotificationApi {
       status: result.status,
       scheduledAt: result.scheduledAt,
       sentAt: result.sentAt,
+      deliverySummary: result.deliverySummary,
     };
   }
 
   async sendCampaign(campaignId: string): Promise<NotificationCampaignItem> {
     const result = await this.httpClient.request<{
       _id: string;
-      category: 'loan' | 'insurance';
+      category: NotificationCampaignItem['category'];
       templateType: string;
-      channels: Array<'email' | 'sms' | 'telegram' | 'in_app'>;
+      channels: Array<'mobile_push' | 'email' | 'sms' | 'telegram' | 'in_app'>;
       targetType: 'single_customer' | 'selected_customers' | 'filtered_customers';
       targetIds: string[];
       messageSubject?: string;
@@ -365,6 +606,7 @@ export class HttpNotificationApi implements NotificationApi {
       status: NotificationCampaignItem['status'];
       scheduledAt?: string;
       sentAt?: string;
+      deliverySummary?: NotificationCampaignItem['deliverySummary'];
     }>(`/manager/notifications/campaigns/${campaignId}/send`, {
       method: 'POST',
       accessToken: getAccessToken(),
@@ -382,6 +624,7 @@ export class HttpNotificationApi implements NotificationApi {
       status: result.status,
       scheduledAt: result.scheduledAt,
       sentAt: result.sentAt,
+      deliverySummary: result.deliverySummary,
     };
   }
 
@@ -394,8 +637,8 @@ export class HttpNotificationApi implements NotificationApi {
         _id: string;
         campaignId: string;
         memberId: string;
-        category: 'loan' | 'insurance';
-        channel: 'email' | 'sms' | 'telegram' | 'in_app';
+        category: NotificationLogItem['category'];
+        channel: 'mobile_push' | 'email' | 'sms' | 'telegram' | 'in_app';
         recipient: string;
         status: NotificationLogItem['status'];
         messageSubject?: string;
@@ -429,6 +672,40 @@ export class HttpNotificationApi implements NotificationApi {
   }
 }
 
+export class HttpRecommendationApi implements RecommendationApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async getDashboardSummary(): Promise<RecommendationDashboardSummary> {
+    return this.httpClient.request<RecommendationDashboardSummary>(
+      '/admin/recommendations/dashboard-summary',
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getCustomerRecommendations(
+    memberId: string,
+  ): Promise<RecommendationCollection> {
+    return this.httpClient.request<RecommendationCollection>(
+      `/admin/recommendations/customers/${memberId}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async generateForCustomer(memberId: string): Promise<void> {
+    await this.httpClient.request(
+      `/admin/recommendations/generate/${memberId}`,
+      {
+        method: 'POST',
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+}
+
 export class HttpVotingApi implements VotingApi {
   constructor(private readonly httpClient: HttpClient) {}
 
@@ -438,15 +715,95 @@ export class HttpVotingApi implements VotingApi {
     });
   }
 
-  async createVote(): Promise<void> {
-    throw new Error('Create vote UI flow is not implemented yet.');
+  async createVote(payload: CreateVotePayload): Promise<VoteAdminItem> {
+    const result = await this.httpClient.request<{
+      id: string;
+      title: string;
+      status: string;
+      startDate: string;
+      endDate: string;
+    }>('/votes', {
+      method: 'POST',
+      accessToken: getAccessToken(),
+      body: payload,
+    });
+
+    return {
+      voteId: result.id,
+      title: result.title,
+      status: result.status,
+      totalResponses: 0,
+      participationRate: 0,
+      eligibleShareholders: 0,
+      startDate: result.startDate,
+      endDate: result.endDate,
+    };
+  }
+
+  async openVote(voteId: string): Promise<VoteAdminItem> {
+    const result = await this.httpClient.request<{
+      id: string;
+      title: string;
+      status: string;
+      startDate: string;
+      endDate: string;
+    }>(`/votes/${voteId}/open`, {
+      method: 'POST',
+      accessToken: getAccessToken(),
+    });
+
+    return {
+      voteId: result.id,
+      title: result.title,
+      status: result.status,
+      totalResponses: 0,
+      participationRate: 0,
+      eligibleShareholders: 0,
+      startDate: result.startDate,
+      endDate: result.endDate,
+    };
+  }
+
+  async closeVote(voteId: string): Promise<VoteAdminItem> {
+    const result = await this.httpClient.request<{
+      id: string;
+      title: string;
+      status: string;
+      startDate: string;
+      endDate: string;
+    }>(`/votes/${voteId}/close`, {
+      method: 'POST',
+      accessToken: getAccessToken(),
+    });
+
+    return {
+      voteId: result.id,
+      title: result.title,
+      status: result.status,
+      totalResponses: 0,
+      participationRate: 0,
+      eligibleShareholders: 0,
+      startDate: result.startDate,
+      endDate: result.endDate,
+    };
+  }
+
+  async getResults(voteId: string): Promise<VoteResultItem[]> {
+    return this.httpClient.request<VoteResultItem[]>(`/votes/${voteId}/results`, {
+      accessToken: getAccessToken(),
+    });
   }
 
   async getParticipation(voteId: string): Promise<VotingSummaryItem | null> {
     const result = await this.httpClient.request<{
       totalResponses: number;
       uniqueBranches: number;
-    }>(`/admin/votes/${voteId}/participation`, {
+      uniqueDistricts: number;
+      eligibleShareholders: number;
+      participationRate: number;
+      branchParticipation: VotingSummaryItem['branchParticipation'];
+      districtParticipation: VotingSummaryItem['districtParticipation'];
+    }>(`/votes/${voteId}/participation`, {
       accessToken: getAccessToken(),
     });
 
@@ -454,8 +811,12 @@ export class HttpVotingApi implements VotingApi {
       voteId,
       title: `Vote ${voteId}`,
       totalResponses: result.totalResponses,
-      eligibleShareholders: 0,
-      participationRate: 0,
+      eligibleShareholders: result.eligibleShareholders,
+      participationRate: result.participationRate,
+      uniqueBranches: result.uniqueBranches,
+      uniqueDistricts: result.uniqueDistricts,
+      branchParticipation: result.branchParticipation,
+      districtParticipation: result.districtParticipation,
     };
   }
 }
@@ -474,6 +835,29 @@ export class HttpAuditApi implements AuditApi {
         createdAt?: string;
       }>
     >('/audit', {
+      accessToken: getAccessToken(),
+    });
+
+    return result.map((item) => ({
+      auditId: item.id,
+      actor: item.actorId,
+      action: item.actionType,
+      entity: `${item.entityType}:${item.entityId}`,
+      timestamp: item.createdAt ?? 'n/a',
+    }));
+  }
+
+  async getEntityAuditTrail(entityType: string, entityId: string): Promise<AuditLogItem[]> {
+    const result = await this.httpClient.request<
+      Array<{
+        id: string;
+        actorId: string;
+        actionType: string;
+        entityType: string;
+        entityId: string;
+        createdAt?: string;
+      }>
+    >(`/audit/entity/${entityType}/${entityId}`, {
       accessToken: getAccessToken(),
     });
 
@@ -507,6 +891,10 @@ export class HttpSupportApi implements SupportApi {
         issueCategory?: string;
         category?: string;
         memberType: string;
+        priority?: string;
+        escalationFlag?: boolean;
+        responseDueAt?: string;
+        slaState?: 'on_track' | 'attention' | 'breached';
         latestMessage?: { message?: string };
         updatedAt?: string;
       }>
@@ -524,6 +912,10 @@ export class HttpSupportApi implements SupportApi {
       status: item.status,
       issueCategory: item.category ?? item.issueCategory ?? 'general_help',
       memberType: item.memberType,
+      priority: item.priority,
+      escalationFlag: item.escalationFlag ?? false,
+      responseDueAt: item.responseDueAt,
+      slaState: item.slaState,
       lastMessage: item.latestMessage?.message ?? '',
       updatedAt: item.updatedAt ?? '',
     }));
@@ -542,6 +934,10 @@ export class HttpSupportApi implements SupportApi {
         issueCategory?: string;
         category?: string;
         memberType: string;
+        priority?: string;
+        escalationFlag?: boolean;
+        responseDueAt?: string;
+        slaState?: 'on_track' | 'attention' | 'breached';
         latestMessage?: { message?: string };
         updatedAt?: string;
       }>
@@ -559,6 +955,10 @@ export class HttpSupportApi implements SupportApi {
       status: item.status,
       issueCategory: item.category ?? item.issueCategory ?? 'general_help',
       memberType: item.memberType,
+      priority: item.priority,
+      escalationFlag: item.escalationFlag ?? false,
+      responseDueAt: item.responseDueAt,
+      slaState: item.slaState,
       lastMessage: item.latestMessage?.message ?? '',
       updatedAt: item.updatedAt ?? '',
     }));
@@ -577,6 +977,10 @@ export class HttpSupportApi implements SupportApi {
         issueCategory?: string;
         category?: string;
         memberType: string;
+        priority?: string;
+        escalationFlag?: boolean;
+        responseDueAt?: string;
+        slaState?: 'on_track' | 'attention' | 'breached';
         latestMessage?: { message?: string };
         updatedAt?: string;
       }>
@@ -594,6 +998,10 @@ export class HttpSupportApi implements SupportApi {
       status: item.status,
       issueCategory: item.category ?? item.issueCategory ?? 'general_help',
       memberType: item.memberType,
+      priority: item.priority,
+      escalationFlag: item.escalationFlag ?? false,
+      responseDueAt: item.responseDueAt,
+      slaState: item.slaState,
       lastMessage: item.latestMessage?.message ?? '',
       updatedAt: item.updatedAt ?? '',
     }));
@@ -664,6 +1072,674 @@ export class HttpSupportApi implements SupportApi {
   }
 }
 
+export class HttpServiceRequestApi implements ServiceRequestApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async getRequests(): Promise<ServiceRequestListResult> {
+    return this.httpClient.request<ServiceRequestListResult>('/manager/service-requests', {
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async getRequest(requestId: string): Promise<ServiceRequestDetail> {
+    return this.httpClient.request<ServiceRequestDetail>(
+      `/manager/service-requests/${requestId}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async downloadAttachment(storageKey: string): Promise<Blob> {
+    return this.httpClient.requestBlob(
+      `/uploads/documents?storageKey=${encodeURIComponent(storageKey)}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getAttachmentMetadata(storageKey: string) {
+    return this.httpClient.request<AttachmentMetadata>(
+      `/uploads/documents/metadata?storageKey=${encodeURIComponent(storageKey)}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async updateStatus(
+    requestId: string,
+    payload: { status: string; note?: string },
+  ): Promise<ServiceRequestDetail> {
+    return this.httpClient.request<ServiceRequestDetail>(
+      `/manager/service-requests/${requestId}/status`,
+      {
+        method: 'PATCH',
+        body: payload,
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+}
+
+export class HttpCardOperationsApi implements CardOperationsApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async getRequests(): Promise<CardOperationItem[]> {
+    return this.httpClient.request<CardOperationItem[]>('/manager/cards/requests', {
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async getRequest(requestId: string): Promise<CardOperationDetail> {
+    return this.httpClient.request<CardOperationDetail>(
+      `/manager/cards/requests/${requestId}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async updateStatus(
+    requestId: string,
+    payload: { status: string; note?: string },
+  ): Promise<CardOperationUpdateResult> {
+    return this.httpClient.request<CardOperationUpdateResult>(
+      `/manager/cards/requests/${requestId}/status`,
+      {
+      method: 'PATCH',
+      body: payload,
+      accessToken: getAccessToken(),
+      },
+    );
+  }
+}
+
+export class HttpPaymentOperationsApi implements PaymentOperationsApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async getActivity() {
+    return this.httpClient.request<PaymentActivityItem[]>('/payments/activity', {
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async getMemberReceipts(memberId: string): Promise<PaymentReceiptItem[]> {
+    return this.httpClient.request<PaymentReceiptItem[]>(
+      `/payments/receipts/member/${memberId}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async downloadAttachment(storageKey: string): Promise<Blob> {
+    return this.httpClient.requestBlob(
+      `/uploads/documents?storageKey=${encodeURIComponent(storageKey)}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getAttachmentMetadata(storageKey: string) {
+    return this.httpClient.request<AttachmentMetadata>(
+      `/uploads/documents/metadata?storageKey=${encodeURIComponent(storageKey)}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+}
+
+export class HttpSchoolConsoleApi implements SchoolConsoleApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async getOverview(): Promise<SchoolConsoleOverview> {
+    const [institutionOverview, invoiceOverview, paymentOverview] = await Promise.all([
+      this.httpClient.request<{
+        totals: {
+          schools: number;
+          students: number;
+          openInvoices: number;
+          todayCollections: number;
+        };
+        schools: SchoolPortfolioItem[];
+      }>('/institutions/schools/overview', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<{
+        totals: {
+          invoices: number;
+          open: number;
+          partiallyPaid: number;
+          overdueAmount: number;
+        };
+        items: SchoolInvoiceItem[];
+      }>('/invoices/overview', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<{
+        totals: {
+          receipts: number;
+          successful: number;
+          pendingSettlement: number;
+          amount: number;
+        };
+        collectionSummary: {
+          generatedAt: string;
+          receipts: number;
+          successful: number;
+          pendingSettlement: number;
+          totalAmount: number;
+          matchedAmount: number;
+          awaitingSettlementAmount: number;
+          aging: Array<{
+            label: string;
+            count: number;
+            amount: number;
+          }>;
+        };
+        schoolSettlements: Array<{
+          schoolId: string;
+          schoolName: string;
+          receipts: number;
+          totalAmount: number;
+          matchedAmount: number;
+          awaitingSettlementAmount: number;
+          pendingSettlement: number;
+          lastRecordedAt?: string;
+        }>;
+        items: SchoolCollectionItem[];
+      }>('/school-payments/overview', {
+        accessToken: getAccessToken(),
+      }),
+    ]);
+
+    return {
+      summary: {
+        schools: institutionOverview.totals.schools,
+        students: institutionOverview.totals.students,
+        openInvoices: institutionOverview.totals.openInvoices,
+        todayCollections: institutionOverview.totals.todayCollections,
+      },
+      schools: institutionOverview.schools,
+      invoices: invoiceOverview.items,
+      collections: paymentOverview.items,
+      collectionSummary: paymentOverview.collectionSummary,
+      schoolSettlements: paymentOverview.schoolSettlements,
+    };
+  }
+
+  async getFeePlans(schoolId?: string): Promise<FeePlanRecord[]> {
+    const suffix = schoolId ? `?schoolId=${encodeURIComponent(schoolId)}` : '';
+    return this.httpClient.request<FeePlanRecord[]>(`/fee-plans${suffix}`, {
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async createFeePlan(payload: {
+    schoolId: string;
+    schoolName: string;
+    academicYear: string;
+    term: string;
+    grade: string;
+    name: string;
+    status: string;
+    items: FeePlanItem[];
+  }): Promise<FeePlanRecord> {
+    return this.httpClient.request<FeePlanRecord>('/fee-plans', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async getRegistry(filters: StudentRegistryFilter = {}): Promise<StudentRegistryItem[]> {
+    const query = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) {
+        query.set(key, value);
+      }
+    }
+
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+
+    const [schools, students, guardians, enrollments] = await Promise.all([
+      this.httpClient.request<SchoolPortfolioItem[]>('/institutions/schools', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<
+        Array<{
+          schoolId: string;
+          studentId: string;
+          fullName: string;
+          grade: string;
+          section: string;
+          guardianName: string;
+          guardianPhone: string;
+          parentAccountNumber?: string;
+          status: string;
+          paymentSummary?: StudentRegistryItem['paymentSummary'];
+          performanceSummary?: StudentRegistryItem['performanceSummary'];
+          parentUpdateSummary?: string;
+        }>
+      >(`/students${suffix}`, {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<
+        Array<{
+          studentId: string;
+          fullName: string;
+          phone: string;
+          status: string;
+        }>
+      >('/guardians', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<
+        Array<{
+          schoolId: string;
+          studentId: string;
+          academicYear: string;
+          grade: string;
+          section: string;
+          rollNumber?: string;
+          status: string;
+        }>
+      >('/enrollments', {
+        accessToken: getAccessToken(),
+      }),
+    ]);
+
+    const schoolNames = new Map(schools.map((item) => [item.id, item.name]));
+    const guardiansByStudentId = new Map(guardians.map((item) => [item.studentId, item]));
+    const enrollmentsByStudentId = new Map(
+      enrollments.map((item) => [item.studentId, item]),
+    );
+
+    return students.map((item) => {
+      const guardian = guardiansByStudentId.get(item.studentId);
+      const enrollment = enrollmentsByStudentId.get(item.studentId);
+
+      return {
+        schoolId: item.schoolId,
+        schoolName: schoolNames.get(item.schoolId) ?? item.schoolId,
+        studentId: item.studentId,
+        fullName: item.fullName,
+        grade: enrollment?.grade ?? item.grade,
+        section: enrollment?.section ?? item.section,
+        guardianName: guardian?.fullName ?? item.guardianName,
+        guardianPhone: guardian?.phone ?? item.guardianPhone,
+        parentAccountNumber: item.parentAccountNumber,
+        guardianStatus: guardian?.status ?? 'unlinked',
+        enrollmentStatus: enrollment?.status ?? 'not_enrolled',
+        academicYear: enrollment?.academicYear ?? 'n/a',
+        rollNumber: enrollment?.rollNumber,
+        status: item.status,
+        paymentSummary: item.paymentSummary,
+        performanceSummary: item.performanceSummary,
+        parentUpdateSummary: item.parentUpdateSummary,
+      };
+    });
+  }
+
+  async getStudentDetail(studentId: string): Promise<StudentDetail | null> {
+    const [registry, guardians, guardianLinks, invoiceOverview, paymentOverview] = await Promise.all([
+      this.getRegistry(),
+      this.httpClient.request<GuardianRecord[]>(
+        `/guardians?studentId=${encodeURIComponent(studentId)}`,
+        {
+          accessToken: getAccessToken(),
+        },
+      ),
+      this.httpClient.request<GuardianStudentLinkItem[]>(
+        `/guardian-student-links?studentId=${encodeURIComponent(studentId)}`,
+        {
+          accessToken: getAccessToken(),
+        },
+      ),
+      this.httpClient.request<{
+        items: SchoolInvoiceItem[];
+      }>('/invoices/overview', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<{
+        items: SchoolCollectionItem[];
+      }>('/school-payments/overview', {
+        accessToken: getAccessToken(),
+      }),
+    ]);
+
+    const student = registry.find((item) => item.studentId === studentId);
+    if (!student) {
+      return null;
+    }
+
+    return {
+      student,
+      guardians,
+      guardianLinks,
+      invoices: invoiceOverview.items.filter((item) => item.studentId === studentId),
+      collections: paymentOverview.items.filter((item) => item.studentId === studentId),
+    };
+  }
+
+  async createGuardian(payload: {
+    studentId: string;
+    fullName: string;
+    phone: string;
+    relationship: string;
+    status: string;
+  }): Promise<GuardianRecord> {
+    return this.httpClient.request<GuardianRecord>('/guardians', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async updateGuardian(
+    guardianId: string,
+    payload: {
+      fullName?: string;
+      phone?: string;
+      relationship?: string;
+      status?: string;
+    },
+  ): Promise<GuardianRecord> {
+    return this.httpClient.request<GuardianRecord>(
+      `/guardians/${encodeURIComponent(guardianId)}`,
+      {
+        method: 'PATCH',
+        body: payload,
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async createGuardianStudentLink(payload: {
+    studentId: string;
+    guardianId: string;
+    memberCustomerId: string;
+    relationship: string;
+    status: string;
+  }): Promise<GuardianStudentLinkItem> {
+    return this.httpClient.request<GuardianStudentLinkItem>('/guardian-student-links', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async updateGuardianStudentLink(
+    linkId: string,
+    payload: {
+      relationship?: string;
+      status?: string;
+    },
+  ): Promise<GuardianStudentLinkItem> {
+    return this.httpClient.request<GuardianStudentLinkItem>(
+      `/guardian-student-links/${encodeURIComponent(linkId)}`,
+      {
+        method: 'PATCH',
+        body: payload,
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async previewInvoiceBatch(payload: {
+    schoolId: string;
+    academicYear?: string;
+    term?: string;
+    grade?: string;
+  }): Promise<InvoiceBatchPreviewResult> {
+    return this.httpClient.request<InvoiceBatchPreviewResult>('/invoices/preview-batch', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async sendInvoiceReminder(invoiceNo: string): Promise<InvoiceReminderResult> {
+    return this.httpClient.request<InvoiceReminderResult>(
+      `/invoices/${encodeURIComponent(invoiceNo)}/send-reminder`,
+      {
+        method: 'POST',
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async sendInvoiceReminders(invoiceNos: string[]): Promise<BulkInvoiceReminderResult> {
+    return this.httpClient.request<BulkInvoiceReminderResult>('/invoices/send-reminders', {
+      method: 'POST',
+      body: { invoiceNos },
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async generateInvoiceBatch(payload: {
+    schoolId: string;
+    academicYear?: string;
+    term?: string;
+    grade?: string;
+  }): Promise<InvoiceBatchGenerationResult> {
+    return this.httpClient.request<InvoiceBatchGenerationResult>(
+      '/invoices/generate-batch',
+      {
+        method: 'POST',
+        body: payload,
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async createSchool(payload: {
+    name: string;
+    code: string;
+    branchName?: string;
+    city?: string;
+    region?: string;
+  }): Promise<SchoolPortfolioItem> {
+    return this.httpClient.request<SchoolPortfolioItem>('/institutions/schools', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+
+  async importStudents(payload: {
+    schoolId: string;
+    students: StudentImportRowInput[];
+  }): Promise<StudentImportResult> {
+    return this.httpClient.request<StudentImportResult>('/students/import', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+}
+
+export class HttpParentPortalApi implements ParentPortalApi {
+  constructor(private readonly httpClient: HttpClient) {}
+
+  async login(payload: {
+    customerId: string;
+    password: string;
+  }): Promise<ParentPortalSession> {
+    const response = await this.httpClient.request<{
+      accessToken: string;
+      refreshToken: string;
+      user: {
+        id: string;
+        customerId?: string;
+        fullName?: string;
+        phone?: string;
+      };
+    }>('/auth/member/login', {
+      method: 'POST',
+      body: payload,
+    });
+
+    window.sessionStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+    window.sessionStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+    window.sessionStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+    window.sessionStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+
+    return {
+      userId: response.user.id,
+      customerId: response.user.customerId ?? payload.customerId,
+      fullName: response.user.fullName ?? formatIdentifierLabel(payload.customerId),
+      phone: response.user.phone,
+    };
+  }
+
+  async getLinkedStudents(): Promise<ParentStudentLookupItem[]> {
+    const [schools, students] = await Promise.all([
+      this.httpClient.request<SchoolPortfolioItem[]>('/institutions/schools', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<
+        Array<{
+          schoolId: string;
+          studentId: string;
+          fullName: string;
+          grade: string;
+          section: string;
+          guardianName: string;
+          guardianPhone: string;
+          parentAccountNumber?: string;
+          status: string;
+          paymentSummary?: ParentStudentLookupItem['paymentSummary'];
+          performanceSummary?: ParentStudentLookupItem['performanceSummary'];
+          parentUpdateSummary?: string;
+        }>
+      >('/students/linked/me', {
+        accessToken: getAccessToken(),
+      }),
+    ]);
+
+    const schoolNames = new Map(schools.map((item) => [item.id, item.name]));
+
+    return students.map((item) => ({
+      schoolId: item.schoolId,
+      schoolName: schoolNames.get(item.schoolId) ?? item.schoolId,
+      studentId: item.studentId,
+      fullName: item.fullName,
+      grade: item.grade,
+      section: item.section,
+      guardianName: item.guardianName,
+      guardianPhone: item.guardianPhone,
+      parentAccountNumber: item.parentAccountNumber,
+      status: item.status,
+      paymentSummary: item.paymentSummary,
+      performanceSummary: item.performanceSummary,
+      parentUpdateSummary: item.parentUpdateSummary,
+    }));
+  }
+
+  async searchStudents(query: string): Promise<ParentStudentLookupItem[]> {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const [schools, students] = await Promise.all([
+      this.httpClient.request<SchoolPortfolioItem[]>('/institutions/schools', {
+        accessToken: getAccessToken(),
+      }),
+      this.httpClient.request<
+        Array<{
+          schoolId: string;
+          studentId: string;
+          fullName: string;
+          grade: string;
+          section: string;
+          guardianName: string;
+          guardianPhone: string;
+          parentAccountNumber?: string;
+          status: string;
+          paymentSummary?: ParentStudentLookupItem['paymentSummary'];
+          performanceSummary?: ParentStudentLookupItem['performanceSummary'];
+          parentUpdateSummary?: string;
+        }>
+      >(`/students?search=${encodeURIComponent(normalizedQuery)}`, {
+        accessToken: getAccessToken(),
+      }),
+    ]);
+
+    const schoolNames = new Map(schools.map((item) => [item.id, item.name]));
+
+    return students.map((item) => ({
+      schoolId: item.schoolId,
+      schoolName: schoolNames.get(item.schoolId) ?? item.schoolId,
+      studentId: item.studentId,
+      fullName: item.fullName,
+      grade: item.grade,
+      section: item.section,
+      guardianName: item.guardianName,
+      guardianPhone: item.guardianPhone,
+      parentAccountNumber: item.parentAccountNumber,
+      status: item.status,
+      paymentSummary: item.paymentSummary,
+      performanceSummary: item.performanceSummary,
+      parentUpdateSummary: item.parentUpdateSummary,
+    }));
+  }
+
+  async getStudentAccount(studentId: string): Promise<ParentStudentAccount | null> {
+    const [linkedStudents, invoices, collections] = await Promise.all([
+      this.getLinkedStudents(),
+      this.httpClient.request<SchoolInvoiceItem[]>(
+        `/invoices?studentId=${encodeURIComponent(studentId)}`,
+        {
+          accessToken: getAccessToken(),
+        },
+      ),
+      this.httpClient.request<SchoolCollectionItem[]>(
+        `/school-payments?studentId=${encodeURIComponent(studentId)}`,
+        {
+          accessToken: getAccessToken(),
+        },
+      ),
+    ]);
+
+    const student =
+      linkedStudents.find((item) => item.studentId === studentId) ?? linkedStudents[0];
+    if (!student) {
+      return null;
+    }
+
+    return {
+      student,
+      invoices,
+      collections,
+      outstandingBalance: invoices.reduce((sum, item) => sum + item.balance, 0),
+      paymentSummary: student.paymentSummary,
+      performanceSummary: student.performanceSummary,
+      parentUpdateSummary: student.parentUpdateSummary,
+    };
+  }
+
+  async submitPayment(payload: {
+    invoiceNo: string;
+    amount: number;
+    channel?: string;
+    payerName?: string;
+    payerPhone?: string;
+  }): Promise<ParentPortalPaymentResult> {
+    return this.httpClient.request<ParentPortalPaymentResult>('/school-payments/collect', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
+}
+
 export function getAccessToken() {
   return window.sessionStorage.getItem(ACCESS_TOKEN_KEY);
 }
@@ -672,16 +1748,4 @@ function formatIdentifierLabel(identifier: string) {
   return identifier
     .replace(/[._-]/g, ' ')
     .replace(/\b\w/g, (value: string) => value.toUpperCase());
-}
-
-function buildScopeLabel(branchId?: string, districtId?: string) {
-  if (branchId) {
-    return `Branch ${branchId}`;
-  }
-
-  if (districtId) {
-    return `District ${districtId}`;
-  }
-
-  return 'Head Office';
 }

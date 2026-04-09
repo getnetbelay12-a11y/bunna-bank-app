@@ -7,5 +7,5 @@ Current behavior:
 - marks read state
 - supports member and staff notifications
 - uses centralized config for outbound channel dispatch
-- supports real SMTP email delivery for reminder campaigns
-- keeps Firebase as an explicit future integration point instead of hiding fake success
+- supports `log` and `generic_http` provider paths now
+- keeps Firebase and SMTP as explicit future integration points instead of hiding fake success

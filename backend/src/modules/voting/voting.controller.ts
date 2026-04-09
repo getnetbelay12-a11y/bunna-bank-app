@@ -45,8 +45,63 @@ export class VotingController {
   }
 
   @Get('votes/:id/results')
-  getVoteResults(@Param('id') voteId: string) {
-    return this.votingService.getVoteResults(voteId);
+  getVoteResults(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') voteId: string,
+  ) {
+    return this.votingService.getVoteResults(currentUser, voteId);
+  }
+
+  @Roles(
+    UserRole.HEAD_OFFICE_OFFICER,
+    UserRole.HEAD_OFFICE_MANAGER,
+    UserRole.ADMIN,
+  )
+  @Post('votes')
+  createVoteAlias(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Body() dto: CreateVoteDto,
+  ) {
+    return this.votingService.createVote(currentUser, dto);
+  }
+
+  @Roles(
+    UserRole.HEAD_OFFICE_OFFICER,
+    UserRole.HEAD_OFFICE_MANAGER,
+    UserRole.ADMIN,
+  )
+  @Post('votes/:id/open')
+  openVoteAlias(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') voteId: string,
+  ) {
+    return this.votingService.openVote(currentUser, voteId);
+  }
+
+  @Roles(
+    UserRole.HEAD_OFFICE_OFFICER,
+    UserRole.HEAD_OFFICE_MANAGER,
+    UserRole.ADMIN,
+  )
+  @Post('votes/:id/close')
+  closeVoteAlias(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') voteId: string,
+  ) {
+    return this.votingService.closeVote(currentUser, voteId);
+  }
+
+  @Roles(
+    UserRole.HEAD_OFFICE_OFFICER,
+    UserRole.HEAD_OFFICE_MANAGER,
+    UserRole.ADMIN,
+  )
+  @Get('votes/:id/participation')
+  getParticipationAlias(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') voteId: string,
+  ) {
+    return this.votingService.getParticipation(currentUser, voteId);
   }
 
   @Roles(

@@ -27,6 +27,18 @@ export class MemberProfileEntity {
   @Prop({ default: 'not_started', index: true })
   identityVerificationStatus!: string;
 
+  @Prop({ default: 'submitted', index: true })
+  onboardingReviewStatus!: string;
+
+  @Prop()
+  onboardingReviewNote?: string;
+
+  @Prop()
+  onboardingReviewedBy?: string;
+
+  @Prop()
+  onboardingLastReviewedAt?: Date;
+
   @Prop({ default: true })
   consentAccepted!: boolean;
 
@@ -38,3 +50,5 @@ export class MemberProfileEntity {
 export const MemberProfileSchema = SchemaFactory.createForClass(MemberProfileEntity);
 
 MemberProfileSchema.index({ branchId: 1, membershipStatus: 1 });
+MemberProfileSchema.index({ branchId: 1, onboardingReviewStatus: 1 });
+MemberProfileSchema.index({ districtId: 1, onboardingReviewStatus: 1 });

@@ -3,11 +3,11 @@ import { validateEnvironment } from './environment.validation';
 describe('validateEnvironment', () => {
   const baseConfig = {
     NODE_ENV: 'development',
-    PORT: '4000',
-    MONGODB_URI: 'mongodb://localhost:27017/cbe_bank_app',
+    PORT: '4008',
+    MONGODB_URI: 'mongodb://localhost:27017/bunna_bank_app',
     JWT_SECRET: 'ChangeThisToALongRandomSecret123',
     OTP_SIGNING_SECRET: 'ChangeThisToALongRandomSecret123',
-    CLIENT_APP_ORIGIN: 'http://localhost:5173',
+    CLIENT_APP_ORIGIN: 'http://localhost:5175',
     STORAGE_PROVIDER: 'local',
     SMS_ENABLED: 'true',
     SMS_PROVIDER: 'log',

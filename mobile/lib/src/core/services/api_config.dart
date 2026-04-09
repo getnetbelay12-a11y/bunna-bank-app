@@ -7,26 +7,21 @@ class ApiConfig {
     'API_BASE_URL',
     defaultValue: '',
   );
-  static const demoModeEnabled = bool.fromEnvironment(
-    'APP_DEMO_MODE',
-    defaultValue: !kReleaseMode,
-  );
   static const _defaultPort = '4000';
 
   static String get baseUrl {
-    final configured = _rawBaseUrl.trim();
-    if (configured.isNotEmpty) {
-      return _normalizeLoopbackHost(configured);
-    }
-
-    if (kReleaseMode) {
-      return '';
+    if (hasConfiguredBaseUrl) {
+      return _normalizeLoopbackHost(configuredBaseUrl);
     }
 
     return _platformDefaultBaseUrl();
   }
 
-  static bool get hasBaseUrl => baseUrl.trim().isNotEmpty;
+  static String get configuredBaseUrl => _rawBaseUrl.trim();
+
+  static bool get hasConfiguredBaseUrl => configuredBaseUrl.isNotEmpty;
+
+  static bool get hasBaseUrl => true;
 
   static String _platformDefaultBaseUrl() {
     if (kIsWeb) {
@@ -62,7 +57,8 @@ class ApiConfig {
       return uri.replace(host: '10.0.2.2').toString();
     }
 
-    if (defaultTargetPlatform == TargetPlatform.iOS && host == 'localhost') {
+    if (defaultTargetPlatform == TargetPlatform.iOS &&
+        host == 'localhost') {
       return uri.replace(host: '127.0.0.1').toString();
     }
 

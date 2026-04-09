@@ -10,6 +10,7 @@ import { FilterQuery, Model, Types } from 'mongoose';
 
 import {
   NotificationStatus,
+  NotificationChannel,
   NotificationType,
   UserRole,
 } from '../../common/enums';
@@ -36,15 +37,26 @@ export class NotificationsService {
   async createNotification(
     dto: CreateNotificationDto,
   ): Promise<NotificationResult> {
-    let delivered = false;
+    let dispatchResult:
+      | {
+          channel: NotificationChannel;
+          status: NotificationStatus;
+          deliveredAt?: Date;
+        }
+      | undefined;
 
     try {
-      delivered = await this.notificationProvider.dispatch({
+      dispatchResult = await this.notificationProvider.dispatch({
         userType: dto.userType,
         userId: dto.userId,
         type: dto.type,
         title: dto.title,
         message: dto.message,
+        priority: dto.priority,
+        actionLabel: dto.actionLabel,
+        deepLink: dto.deepLink,
+        dataPayload: dto.dataPayload,
+        preferredChannel: dto.channel,
       });
     } catch (error) {
       this.logger.warn(
@@ -53,18 +65,38 @@ export class NotificationsService {
       );
     }
 
+    return this.storeNotificationRecord({
+      ...dto,
+      channel:
+        dto.channel ??
+        dispatchResult?.channel ??
+        NotificationChannel.MOBILE_PUSH,
+      status: dto.status ?? dispatchResult?.status ?? NotificationStatus.FAILED,
+      deliveredAt: dispatchResult?.deliveredAt,
+    });
+  }
+
+  async storeNotificationRecord(
+    dto: CreateNotificationDto & {
+      deliveredAt?: Date;
+    },
+  ): Promise<NotificationResult> {
     const notification = await this.notificationModel.create({
       userType: dto.userType,
       userId: new Types.ObjectId(dto.userId),
       userRole: dto.userRole,
       type: dto.type,
-      status:
-        dto.status ??
-        (delivered ? NotificationStatus.SENT : NotificationStatus.FAILED),
+      channel: dto.channel ?? NotificationChannel.MOBILE_PUSH,
+      status: dto.status ?? NotificationStatus.PENDING,
       title: dto.title,
       message: dto.message,
       entityType: dto.entityType,
       entityId: dto.entityId ? new Types.ObjectId(dto.entityId) : undefined,
+      actionLabel: dto.actionLabel,
+      priority: dto.priority,
+      deepLink: dto.deepLink,
+      dataPayload: dto.dataPayload,
+      deliveredAt: dto.deliveredAt,
     });
 
     return this.toResult(notification);
@@ -155,12 +187,19 @@ export class NotificationsService {
       userId: notification.userId.toString(),
       userRole: notification.userRole,
       type: notification.type as NotificationType,
+      channel: (notification.channel ??
+        NotificationChannel.MOBILE_PUSH) as NotificationChannel,
       status: notification.status,
       title: notification.title,
       message: notification.message,
       entityType: notification.entityType,
       entityId: notification.entityId?.toString(),
+      actionLabel: notification.actionLabel,
+      priority: notification.priority,
+      deepLink: notification.deepLink,
+      dataPayload: notification.dataPayload,
       readAt: notification.readAt,
+      deliveredAt: notification.deliveredAt,
       createdAt: notification.createdAt,
       updatedAt: notification.updatedAt,
     };

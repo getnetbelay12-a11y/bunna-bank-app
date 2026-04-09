@@ -6,10 +6,14 @@ import { LoanWorkflowService } from './loan-workflow.service';
 
 describe('LoanWorkflowService', () => {
   let loanModel: { findById: jest.Mock };
+  let memberModel: { aggregate: jest.Mock };
+  let transactionModel: { aggregate: jest.Mock };
+  let autopaySettingModel: { find: jest.Mock };
+  let chatConversationModel: { aggregate: jest.Mock };
   let workflowHistoryModel: { create: jest.Mock };
   let staffActivityLogModel: { create: jest.Mock };
-  let notificationModel: { create: jest.Mock };
-  let auditService: { log: jest.Mock };
+  let notificationsService: { createNotification: jest.Mock };
+  let auditService: { logActorAction: jest.Mock };
   let service: LoanWorkflowService;
 
   const buildLoan = ({
@@ -32,17 +36,25 @@ describe('LoanWorkflowService', () => {
 
   beforeEach(() => {
     loanModel = { findById: jest.fn() };
+    memberModel = { aggregate: jest.fn() };
+    transactionModel = { aggregate: jest.fn() };
+    autopaySettingModel = { find: jest.fn() };
+    chatConversationModel = { aggregate: jest.fn() };
     workflowHistoryModel = { create: jest.fn() };
     staffActivityLogModel = { create: jest.fn() };
-    notificationModel = { create: jest.fn() };
-    auditService = { log: jest.fn() };
+    notificationsService = { createNotification: jest.fn() };
+    auditService = { logActorAction: jest.fn() };
 
     service = new LoanWorkflowService(
       loanModel as never,
+      memberModel as never,
+      transactionModel as never,
+      autopaySettingModel as never,
+      chatConversationModel as never,
       workflowHistoryModel as never,
       staffActivityLogModel as never,
-      notificationModel as never,
       auditService as never,
+      notificationsService as never,
     );
   });
 
@@ -59,8 +71,17 @@ describe('LoanWorkflowService', () => {
     expect(result.status).toBe(LoanStatus.APPROVED);
     expect(workflowHistoryModel.create).toHaveBeenCalled();
     expect(staffActivityLogModel.create).toHaveBeenCalled();
-    expect(notificationModel.create).toHaveBeenCalled();
-    expect(auditService.log).toHaveBeenCalled();
+    expect(notificationsService.createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: loan.memberId.toString(),
+        entityType: 'loan',
+        entityId: loan._id.toString(),
+        actionLabel: 'Open loan',
+        priority: 'normal',
+        deepLink: `/loans/${loan._id.toString()}`,
+      }),
+    );
+    expect(auditService.logActorAction).toHaveBeenCalled();
   });
 
   it('forces high-value branch loans to be forwarded instead of approved', async () => {
@@ -88,6 +109,37 @@ describe('LoanWorkflowService', () => {
 
     expect(result.status).toBe(LoanStatus.DISTRICT_REVIEW);
     expect(result.currentLevel).toBe(LoanWorkflowLevel.DISTRICT);
+  });
+
+  it('marks return-for-correction notifications as high priority', async () => {
+    const loan = buildLoan({
+      amount: 850_000,
+      status: LoanStatus.BRANCH_REVIEW,
+      currentLevel: LoanWorkflowLevel.BRANCH,
+    });
+    loanModel.findById.mockResolvedValue(loan);
+
+    const result = await service.processAction(
+      { sub: new Types.ObjectId().toString(), role: UserRole.LOAN_OFFICER },
+      loan._id.toString(),
+      {
+        action: LoanAction.RETURN_FOR_CORRECTION,
+        comment: 'Upload clearer collateral file.',
+        deficiencyReasons: ['Upload clearer collateral file.'],
+      },
+    );
+
+    expect(result.status).toBe(LoanStatus.SUBMITTED);
+    expect(result.currentLevel).toBe(LoanWorkflowLevel.BRANCH);
+    expect(notificationsService.createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: loan.memberId.toString(),
+        entityId: loan._id.toString(),
+        actionLabel: 'Open loan',
+        priority: 'high',
+        deepLink: `/loans/${loan._id.toString()}`,
+      }),
+    );
   });
 
   it('prevents approve after reject', async () => {

@@ -23,6 +23,28 @@ export class MembersRepository {
     return member ? this.toProfile(member) : null;
   }
 
+  async findByCustomerId(customerId: string): Promise<MemberProfile | null> {
+    const normalized = customerId.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const member = await this.memberModel
+      .findOne({
+        $or: [
+          { customerId: normalized },
+          { customerId: normalized.toUpperCase() },
+          { memberNumber: normalized },
+          { memberNumber: normalized.toUpperCase() },
+        ],
+      })
+      .populate({ path: 'branchId', select: 'name' })
+      .populate({ path: 'districtId', select: 'name' })
+      .lean<MemberProfile | null>();
+
+    return member ? this.toProfile(member) : null;
+  }
+
   async updateById(id: string, dto: UpdateMyProfileDto): Promise<MemberProfile> {
     const member = await this.memberModel
       .findByIdAndUpdate(

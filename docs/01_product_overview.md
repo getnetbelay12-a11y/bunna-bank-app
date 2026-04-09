@@ -1,7 +1,7 @@
 # Product Overview
 
 ## Product goal
-Build a mobile and web banking platform for CBE Bank members, including shareholders and regular members, with strong loan workflow support, school payments, notifications, and staff performance tracking.
+Build a mobile and web banking platform for Bunna Bank members, including shareholders and regular members, with strong loan workflow support, school payments, notifications, and staff performance tracking.
 
 ## Primary users
 ### Shareholder member

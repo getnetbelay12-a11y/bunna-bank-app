@@ -12,7 +12,13 @@ describe('DashboardService', () => {
   let yearlyModel: { aggregate: jest.Mock };
   let voteModel: { find: jest.Mock };
   let voteResponseModel: { countDocuments: jest.Mock };
-  let memberModel: { countDocuments: jest.Mock };
+  let memberModel: { countDocuments: jest.Mock; findById: jest.Mock };
+  let memberProfileModel: {
+    aggregate: jest.Mock;
+    findOne: jest.Mock;
+  };
+  let autopayModel: { find: jest.Mock; findOne: jest.Mock };
+  let auditService: { log: jest.Mock };
   let service: DashboardService;
 
   beforeEach(() => {
@@ -24,7 +30,10 @@ describe('DashboardService', () => {
     yearlyModel = { aggregate: jest.fn() };
     voteModel = { find: jest.fn() };
     voteResponseModel = { countDocuments: jest.fn() };
-    memberModel = { countDocuments: jest.fn() };
+    memberModel = { countDocuments: jest.fn(), findById: jest.fn() };
+    memberProfileModel = { aggregate: jest.fn(), findOne: jest.fn() };
+    autopayModel = { find: jest.fn(), findOne: jest.fn() };
+    auditService = { log: jest.fn() };
 
     service = new DashboardService(
       loanModel as never,
@@ -36,6 +45,9 @@ describe('DashboardService', () => {
       voteModel as never,
       voteResponseModel as never,
       memberModel as never,
+      memberProfileModel as never,
+      autopayModel as never,
+      auditService as never,
     );
   });
 
@@ -104,6 +116,26 @@ describe('DashboardService', () => {
         participationRate: 40,
       },
     ]);
+  });
+
+  it('builds onboarding review queue', async () => {
+    memberProfileModel.aggregate.mockResolvedValue([
+      {
+        memberId: 'member_1',
+        customerId: 'BUN-100001',
+        memberName: 'Abebe Kebede',
+        onboardingReviewStatus: 'submitted',
+        requiredAction: 'Validate Fayda QR evidence',
+      },
+    ]);
+
+    const result = await service.getOnboardingReviewQueue({
+      sub: 'staff_1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].onboardingReviewStatus).toBe('submitted');
   });
 
   it('rejects non-manager access', async () => {

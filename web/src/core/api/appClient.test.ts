@@ -12,6 +12,10 @@ describe('FallbackDashboardApi', () => {
         getDistrictPerformance: vi.fn(),
         getStaffRanking: vi.fn(),
         getVotingSummary: vi.fn(),
+        getOnboardingReviewQueue: vi.fn(),
+        getAutopayOperations: vi.fn(),
+        updateAutopayOperation: vi.fn(),
+        updateOnboardingReview: vi.fn(),
         getHeadOfficeDistrictSummary: vi.fn(),
         getHeadOfficeTopDistricts: vi.fn(),
         getHeadOfficeDistrictWatchlist: vi.fn(),
@@ -21,6 +25,9 @@ describe('FallbackDashboardApi', () => {
         getBranchEmployeeSummary: vi.fn(),
         getBranchTopEmployees: vi.fn(),
         getBranchEmployeeWatchlist: vi.fn(),
+        getHeadOfficeCommandCenter: vi.fn(),
+        getDistrictCommandCenter: vi.fn(),
+        getBranchCommandCenter: vi.fn(),
       },
       {
         getSummary: vi.fn().mockResolvedValue({
@@ -33,6 +40,10 @@ describe('FallbackDashboardApi', () => {
         getDistrictPerformance: vi.fn(),
         getStaffRanking: vi.fn(),
         getVotingSummary: vi.fn(),
+        getOnboardingReviewQueue: vi.fn(),
+        getAutopayOperations: vi.fn(),
+        updateAutopayOperation: vi.fn(),
+        updateOnboardingReview: vi.fn(),
         getHeadOfficeDistrictSummary: vi.fn(),
         getHeadOfficeTopDistricts: vi.fn(),
         getHeadOfficeDistrictWatchlist: vi.fn(),
@@ -42,6 +53,9 @@ describe('FallbackDashboardApi', () => {
         getBranchEmployeeSummary: vi.fn(),
         getBranchTopEmployees: vi.fn(),
         getBranchEmployeeWatchlist: vi.fn(),
+        getHeadOfficeCommandCenter: vi.fn(),
+        getDistrictCommandCenter: vi.fn(),
+        getBranchCommandCenter: vi.fn(),
       },
     );
 

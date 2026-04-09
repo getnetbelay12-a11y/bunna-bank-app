@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuditModule } from '../audit/audit.module';
+import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
@@ -31,6 +32,7 @@ import {
       { name: ChatParticipant.name, schema: ChatParticipantSchema },
       { name: ChatAssignment.name, schema: ChatAssignmentSchema },
       { name: ChatStatusLog.name, schema: ChatStatusLogSchema },
+      { name: Loan.name, schema: LoanSchema },
     ]),
     NotificationsModule,
     AuditModule,

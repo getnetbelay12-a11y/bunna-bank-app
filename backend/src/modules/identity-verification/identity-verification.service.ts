@@ -119,6 +119,10 @@ export class IdentityVerificationService {
       throw new NotFoundException('Fayda verification has not been started.');
     }
 
+    if (existing.verificationStatus === 'verified') {
+      return this.toResult(existing);
+    }
+
     const result = await this.provider.verify({
       memberId: currentUser.sub,
       phoneNumber: existing.phoneNumber,
@@ -172,9 +176,9 @@ export class IdentityVerificationService {
       id: record.id ?? record._id.toString(),
       memberId: record.memberId.toString(),
       phoneNumber: record.phoneNumber,
-      faydaFin: record.faydaFin,
+      faydaFin: this.maskFaydaFin(record.faydaFin),
       faydaAlias: record.faydaAlias,
-      qrDataRaw: record.qrDataRaw,
+      qrDataRaw: record.qrDataRaw ? '[redacted]' : undefined,
       verificationMethod: record.verificationMethod,
       verificationStatus: record.verificationStatus,
       verifiedAt: record.verifiedAt,
@@ -183,5 +187,17 @@ export class IdentityVerificationService {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };
+  }
+
+  private maskFaydaFin(faydaFin?: string) {
+    if (!faydaFin) {
+      return undefined;
+    }
+
+    if (faydaFin.length <= 4) {
+      return '*'.repeat(faydaFin.length);
+    }
+
+    return `${'*'.repeat(faydaFin.length - 4)}${faydaFin.slice(-4)}`;
   }
 }

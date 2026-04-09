@@ -1,173 +1,329 @@
 import 'package:flutter/material.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
 import '../../../app/app_scope.dart';
+import '../../../core/models/app_notification.dart';
 import '../../../core/models/loan_summary.dart';
-import '../../../shared/widgets/banking_activity_tile.dart';
-import '../../../shared/widgets/section_card.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/app_list_item.dart';
+import '../../../shared/widgets/app_new_badge.dart';
+import '../../chat/presentation/live_chat_list_screen.dart';
+import '../../chat/presentation/live_chat_detail_screen.dart';
 import 'loan_application_screen.dart';
 import 'loan_detail_screen.dart';
 import 'loan_document_upload_screen.dart';
 
 class MyLoansScreen extends StatelessWidget {
-  const MyLoansScreen({super.key});
+  const MyLoansScreen({
+    super.key,
+    this.embeddedInTab = false,
+  });
+
+  final bool embeddedInTab;
 
   @override
   Widget build(BuildContext context) {
     final services = AppScope.of(context).services;
 
-    return FutureBuilder<List<LoanSummary>>(
-      future: services.loanApi.fetchMyLoans(),
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<dynamic>([
+        services.loanApi.fetchMyLoans(),
+        services.notificationApi.fetchMyNotifications(),
+      ]),
       builder: (context, snapshot) {
-        final loans = snapshot.data ?? const [];
+        final loans = snapshot.data?[0] as List<LoanSummary>? ?? const <LoanSummary>[];
+        final notifications = snapshot.data?[1] as List<AppNotification>? ?? const <AppNotification>[];
+        final loanAlerts = notifications
+            .where(
+              (item) =>
+                  item.type.contains('loan') ||
+                  item.type.contains('insurance'),
+            )
+            .take(3)
+            .toList();
+        final hasActiveLoan = loans.any((item) => item.status != 'rejected');
 
-        return Material(
-          color: const Color(0xFFF5F7FB),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Text(
-                'Loan Activity',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Track every stage from draft to disbursement with clear workflow visibility.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: const Color(0xFF64748B),
-                    ),
-              ),
-              const SizedBox(height: 16),
-              SectionCard(
-                title: 'Loans',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        FilledButton(
+        final content = ListView(
+          padding: EdgeInsets.fromLTRB(20, embeddedInTab ? 12 : 20, 20, 24),
+          children: [
+                if (embeddedInTab)
+                  const AppHeader(
+                    title: 'Loans',
+                    subtitle: 'Apply, upload documents, track workflow status, and stay ahead of loan reminders.',
+                  ),
+                if (!embeddedInTab)
+                  Text(
+                    'Apply, upload documents, track workflow status, and stay ahead of loan reminders.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                const SizedBox(height: 16),
+                AppCard(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          label: 'Apply Loan',
                           onPressed: () {
                             Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const LoanApplicationScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text('Apply Loan'),
-                        ),
-                        FilledButton.tonal(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    const LoanDocumentUploadScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text('Upload Documents'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    for (final loan in loans)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: BankingActivityTile(
-                          icon: Icons.account_balance_wallet_rounded,
-                          title: loan.loanType,
-                          dateLabel: _levelLabel(loan.currentLevel),
-                          trailingLabel:
-                              'ETB ${loan.amount.toStringAsFixed(0)}',
-                          description:
-                              loan.purpose ?? 'Loan purpose not provided.',
-                          badgeLabel: _statusLabel(loan.status),
-                          badgeColor: _statusColor(loan.status),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const LoanDetailScreen(),
-                              ),
+                              MaterialPageRoute<void>(builder: (_) => const LoanApplicationScreen()),
                             );
                           },
                         ),
                       ),
-                    const SizedBox(height: 20),
-                    const _RepaymentScheduleCard(),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppButton(
+                          label: 'Upload Docs',
+                          secondary: true,
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(builder: (_) => const LoanDocumentUploadScreen()),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              ],
-            ),
+                const SizedBox(height: 16),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Loan overview',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 10),
+                      if (!hasActiveLoan)
+                        Text(
+                          'You have no active loan right now. Start a new application when you need financing.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        )
+                      else
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            _SummaryChip(
+                              label: 'Active',
+                              value: '${loans.where((item) => item.status != 'rejected').length}',
+                            ),
+                            _SummaryChip(
+                              label: 'Need documents',
+                              value: '${loans.where((item) => item.status == 'need_documents').length}',
+                            ),
+                            _SummaryChip(
+                              label: 'Approved',
+                              value: '${loans.where((item) => item.status == 'approved').length}',
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'My loan tracker',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(width: 8),
+                          const AppNewBadge(),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (loans.isEmpty)
+                        Text(
+                          'Loan applications and repayment milestones will appear here.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        )
+                      else
+                        for (var index = 0; index < loans.length; index++) ...[
+                          AppListItem(
+                            title: loans[index].loanType,
+                            subtitle:
+                                'ETB ${loans[index].amount.toStringAsFixed(0)} · ${_statusLabel(loans[index].status)} · ${_levelLabel(loans[index].currentLevel)}',
+                            icon: Icons.account_balance_wallet_outlined,
+                            badge: loans[index].status.toUpperCase(),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => LoanDetailScreen(loanId: loans[index].loanId),
+                                ),
+                              );
+                            },
+                          ),
+                          if (index != loans.length - 1) const Divider(height: 1),
+                        ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Loan and insurance alerts',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      if (loanAlerts.isEmpty)
+                        Text(
+                          'Loan reminders, insurance due notices, and workflow updates will appear here.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        )
+                      else
+                        for (var index = 0; index < loanAlerts.length; index++) ...[
+                          AppListItem(
+                            title: loanAlerts[index].title,
+                            subtitle: loanAlerts[index].message,
+                            icon: loanAlerts[index].type.contains('insurance')
+                                ? Icons.health_and_safety_outlined
+                                : Icons.notifications_active_outlined,
+                            badge: _timeLabel(loanAlerts[index].createdAt),
+                            onTap: () {
+                              if (loans.isNotEmpty) {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => LoanDetailScreen(loanId: loans.first.loanId),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          if (index != loanAlerts.length - 1) const Divider(height: 1),
+                        ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Need help with a loan?',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Open live chat for document requests, follow-up, or questions about approval progress.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 14),
+                      AppButton(
+                        label: 'Open Loan Support',
+                        secondary: true,
+                        onPressed: loans.isEmpty
+                            ? () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(builder: (_) => const LiveChatListScreen()),
+                                );
+                              }
+                            : () => _openLoanSupport(context, loans.first),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        );
+
+        if (embeddedInTab) {
+          return Material(
+            color: Colors.white,
+            child: SafeArea(top: false, child: content),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            leading: const BackButton(),
+            title: const Text('Loans'),
+          ),
+          body: Material(
+            color: Colors.white,
+            child: SafeArea(top: false, child: content),
           ),
         );
       },
     );
   }
 
-  String _statusLabel(String value) => value.replaceAll('_', ' ').toUpperCase();
+  static String _statusLabel(String value) => value.replaceAll('_', ' ');
+  static String _levelLabel(String value) => value.replaceAll('_', ' ');
 
-  String _levelLabel(String value) =>
-      'Stage: ${value.replaceAll('_', ' ').toUpperCase()}';
+  Future<void> _openLoanSupport(BuildContext context, LoanSummary loan) async {
+    final services = AppScope.of(context).services;
+    final conversation = await services.chatApi.createConversation(
+      issueCategory: 'loan_issue',
+      loanId: loan.loanId,
+      initialMessage:
+          'I need support for ${loan.loanType}. The loan is currently at ${loan.currentLevel.replaceAll('_', ' ')} review.',
+    );
 
-  Color _statusColor(String status) {
-    if (status.contains('approved') || status.contains('disbursed')) {
-      return Colors.green;
+    if (!context.mounted) {
+      return;
     }
-    if (status.contains('rejected')) {
-      return Colors.red;
-    }
-    return cbeBlue;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LiveChatDetailScreen(
+          conversationId: conversation.id,
+          initialConversation: conversation,
+        ),
+      ),
+    );
   }
 }
 
-class _RepaymentScheduleCard extends StatelessWidget {
-  const _RepaymentScheduleCard();
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    const repayments = [
-      (
-        title: 'Monthly repayment',
-        date: '2026-03-28',
-        amount: 'ETB 18,500',
-        description: 'Scheduled deduction for active salary-backed loan.',
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD9E2EE)),
       ),
-      (
-        title: 'Insurance renewal',
-        date: '2026-04-05',
-        amount: 'ETB 4,200',
-        description: 'Linked insurance reminder before next repayment cycle.',
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Repayment Schedule',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-        ),
-        const SizedBox(height: 12),
-        for (final item in repayments) ...[
-          BankingActivityTile(
-            icon: Icons.event_repeat_rounded,
-            title: item.title,
-            dateLabel: item.date,
-            trailingLabel: item.amount,
-            description: item.description,
-            badgeLabel: 'Upcoming',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          if (item != repayments.last) const SizedBox(height: 12),
+          const SizedBox(height: 2),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
         ],
-      ],
+      ),
     );
   }
+}
+
+String _timeLabel(DateTime value) {
+  final difference = DateTime.now().difference(value);
+  if (difference.inHours < 1) {
+    return '${difference.inMinutes.clamp(1, 59)}m';
+  }
+  if (difference.inDays < 1) {
+    return '${difference.inHours}h';
+  }
+  return '${difference.inDays}d';
 }

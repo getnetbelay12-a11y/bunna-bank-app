@@ -1,4 +1,5 @@
 import {
+  IsEmail,
   IsBoolean,
   IsOptional,
   IsString,
@@ -21,6 +22,11 @@ export class RegisterMemberDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(32)
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail()
   @MaxLength(120)
   email?: string;
 

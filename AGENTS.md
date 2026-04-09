@@ -37,10 +37,10 @@ Always:
 ## Database Rule
 
 The backend must use MongoDB with the database name:
-`cbe_bank_app`
+`bunna_bank_app`
 
 Defaults:
-- local: `mongodb://localhost:27017/cbe_bank_app`
-- Atlas: `mongodb+srv://<username>:<password>@cluster.mongodb.net/cbe_bank_app`
+- local: `mongodb://localhost:27017/bunna_bank_app`
+- Atlas: `mongodb+srv://<username>:<password>@cluster.mongodb.net/bunna_bank_app`
 
 Do not manually create the database with shell scripts. Let MongoDB create it automatically when the first collections are written.

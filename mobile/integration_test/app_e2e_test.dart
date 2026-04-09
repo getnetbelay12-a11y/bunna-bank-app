@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:cbe_bank_mobile/src/app/app.dart';
-import 'package:cbe_bank_mobile/src/features/auth/presentation/login_screen.dart';
-import 'package:cbe_bank_mobile/src/features/profile/presentation/profile_screen.dart';
-import 'package:cbe_bank_mobile/src/features/splash/presentation/splash_screen.dart';
-import 'package:cbe_bank_mobile/widgets/cbe_bank_logo.dart';
+import 'package:bunna_bank_mobile/src/app/app.dart';
+import 'package:bunna_bank_mobile/src/core/services/app_services.dart';
+import 'package:bunna_bank_mobile/src/features/auth/presentation/login_screen.dart';
+import 'package:bunna_bank_mobile/src/features/profile/presentation/profile_screen.dart';
+import 'package:bunna_bank_mobile/src/features/splash/presentation/splash_screen.dart';
+import 'package:bunna_bank_mobile/widgets/bunna_bank_logo_compat.dart';
+import 'package:bunna_bank_mobile/widgets/bunna_bank_mark.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -14,17 +16,18 @@ void main() {
   testWidgets('shareholder login flow shows branded home and profile screens', (
     tester,
   ) async {
-    await tester.pumpWidget(const CbeBankApp());
+    await tester.pumpWidget(BunnaBankApp(services: AppServices.demo()));
 
     expect(find.byType(SplashScreen), findsOneWidget);
-    expect(find.byType(CbeBankLogo), findsOneWidget);
-    expect(find.text('CBE Bank'), findsOneWidget);
+    expect(find.byType(BunnaBankMark), findsOneWidget);
+    expect(find.byType(BunnaBankLogo), findsOneWidget);
+    expect(find.text('Bunna Bank'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 1300));
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.byType(CbeBankLogo), findsOneWidget);
+    expect(find.byType(BunnaBankLogo), findsOneWidget);
     expect(
       find.text('Simple secure access for membership services'),
       findsOneWidget,
@@ -47,15 +50,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsWidgets);
-    expect(find.text('Send Money'), findsWidgets);
-    expect(find.text('Loan Workflow'), findsOneWidget);
+    expect(find.text('Transfer'), findsWidgets);
+    expect(find.text('Telebirr'), findsWidgets);
+    expect(find.text('Telecom'), findsWidgets);
+    expect(find.text('Support'), findsWidgets);
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ProfileScreen), findsOneWidget);
     expect(find.text('Profile'), findsWidgets);
-    expect(find.text('Updated Navigation'), findsOneWidget);
-    expect(find.byType(CbeBankLogo), findsWidgets);
+    expect(find.text('Abebe Kebede'), findsOneWidget);
+    expect(find.text('Account summary'), findsOneWidget);
+    expect(find.textContaining('Branch:'), findsOneWidget);
   });
 }

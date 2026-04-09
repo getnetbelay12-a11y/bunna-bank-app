@@ -32,7 +32,7 @@ export class ShareholdersService {
       throw new NotFoundException('Shareholder not found.');
     }
 
-    return member;
+    return this.toShareholderProfile(member);
   }
 
   async getMyVotingEligibility(
@@ -61,7 +61,7 @@ export class ShareholdersService {
       throw new NotFoundException('Shareholder not found.');
     }
 
-    return member;
+    return this.toShareholderProfile(member);
   }
 
   async getVotingEligibilityByMemberId(
@@ -135,5 +135,14 @@ export class ShareholdersService {
     ) {
       throw new ForbiddenException('Only staff users can access this resource.');
     }
+  }
+
+  private toShareholderProfile(member: ShareholderProfile): ShareholderProfile {
+    return {
+      ...member,
+      shareholderId: member.shareholderId ?? member.memberNumber,
+      shares: member.shares ?? member.shareBalance,
+      shareBalance: member.shareBalance ?? member.shares ?? 0,
+    };
   }
 }

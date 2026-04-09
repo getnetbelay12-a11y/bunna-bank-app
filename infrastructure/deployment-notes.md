@@ -7,7 +7,7 @@
 - Run `npm run build`
 - Optional for local PoC data: `npm run seed:demo`
 - Run `npm start`
-- Default local database: `mongodb://localhost:27017/cbe_bank_app`
+- Default local database: `mongodb://localhost:27017/bunna_bank_app`
 - Default production-safe storage mode: `STORAGE_PROVIDER=local`
 - Do not set `STORAGE_PROVIDER=s3` in production until the S3 upload client is implemented
 - Do not set `EMAIL_PROVIDER=smtp` or `PUSH_PROVIDER=firebase` in production until those providers are implemented end to end
@@ -25,7 +25,7 @@
 
 ## Mobile
 - Set `API_BASE_URL` with `--dart-define`, for example:
-  `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4000`
+  `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4008`
 - Run `flutter pub get`
 - Run `flutter run`
 - Release builds should set `API_BASE_URL`

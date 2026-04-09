@@ -1,10 +1,16 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { AuditModule } from '../audit/audit.module';
+import { ChatConversation, ChatConversationSchema } from '../chat/schemas/chat-conversation.schema';
 import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
 import { Branch, BranchSchema } from '../members/schemas/branch.schema';
 import { District, DistrictSchema } from '../members/schemas/district.schema';
 import { Member, MemberSchema } from '../members/schemas/member.schema';
+import { MemberProfileEntity, MemberProfileSchema } from '../member-profiles/schemas/member-profile.schema';
+import { NotificationCampaign, NotificationCampaignSchema } from '../notifications/schemas/notification-campaign.schema';
+import { SavingsAccount, SavingsAccountSchema } from '../savings/schemas/savings-account.schema';
+import { AutopaySetting, AutopaySettingSchema } from '../service-placeholders/schemas/autopay-setting.schema';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
 import { BranchPerformanceDaily, BranchPerformanceDailySchema } from '../staff-activity/schemas/branch-performance-daily.schema';
 import { DistrictPerformanceDaily, DistrictPerformanceDailySchema } from '../staff-activity/schemas/district-performance-daily.schema';
@@ -15,13 +21,17 @@ import { StaffPerformanceWeekly, StaffPerformanceWeeklySchema } from '../staff-a
 import { StaffPerformanceYearly, StaffPerformanceYearlySchema } from '../staff-activity/schemas/staff-performance-yearly.schema';
 import { VoteResponse, VoteResponseSchema } from '../voting/schemas/vote-response.schema';
 import { Vote, VoteSchema } from '../voting/schemas/vote.schema';
+import { CommandCenterController } from './command-center.controller';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 import { ManagerPerformanceController } from './manager-performance.controller';
 import { ManagerPerformanceService } from './manager-performance.service';
+import { PerformanceService } from './performance.service';
+import { RiskService } from './risk.service';
 
 @Module({
   imports: [
+    AuditModule,
     MongooseModule.forFeature([
       { name: Loan.name, schema: LoanSchema },
       { name: Branch.name, schema: BranchSchema },
@@ -37,10 +47,15 @@ import { ManagerPerformanceService } from './manager-performance.service';
       { name: Vote.name, schema: VoteSchema },
       { name: VoteResponse.name, schema: VoteResponseSchema },
       { name: Member.name, schema: MemberSchema },
+      { name: MemberProfileEntity.name, schema: MemberProfileSchema },
+      { name: SavingsAccount.name, schema: SavingsAccountSchema },
+      { name: ChatConversation.name, schema: ChatConversationSchema },
+      { name: NotificationCampaign.name, schema: NotificationCampaignSchema },
+      { name: AutopaySetting.name, schema: AutopaySettingSchema },
     ]),
   ],
-  controllers: [DashboardController, ManagerPerformanceController],
-  providers: [DashboardService, ManagerPerformanceService],
-  exports: [DashboardService, ManagerPerformanceService],
+  controllers: [DashboardController, ManagerPerformanceController, CommandCenterController],
+  providers: [DashboardService, ManagerPerformanceService, PerformanceService, RiskService],
+  exports: [DashboardService, ManagerPerformanceService, PerformanceService, RiskService],
 })
 export class DashboardModule {}

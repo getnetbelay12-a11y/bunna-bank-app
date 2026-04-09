@@ -17,7 +17,7 @@ export class Branch {
   @Prop({ trim: true })
   city?: string;
 
-  @Prop({ trim: true, default: 'Amhara', index: true })
+  @Prop({ trim: true, default: 'National', index: true })
   region?: string;
 
   @Prop({ default: true, index: true })

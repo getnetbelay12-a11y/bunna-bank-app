@@ -8,6 +8,11 @@ export class CheckExistingAccountDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(32)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(12)
   faydaFin?: string;
 

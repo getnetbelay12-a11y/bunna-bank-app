@@ -36,7 +36,7 @@ export class AtmCardRequest {
   selfieImageUrl?: string;
 
   @Prop({ required: true, trim: true })
-  pin!: string;
+  pinHash!: string;
 
   @Prop({ default: 'submitted', index: true })
   status!: string;

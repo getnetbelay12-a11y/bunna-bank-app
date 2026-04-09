@@ -13,16 +13,27 @@ import {
   LoanAction,
   LoanStatus,
   LoanWorkflowLevel,
-  NotificationType,
+  PaymentType,
   UserRole,
 } from '../../common/enums';
 import { AuthenticatedUser } from '../auth/interfaces';
 import { AuditService } from '../audit/audit.service';
+import { ChatConversation, ChatConversationDocument } from '../chat/schemas/chat-conversation.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
-import { Notification, NotificationDocument } from '../notifications/schemas/notification.schema';
+import { Member, MemberDocument } from '../members/schemas/member.schema';
+import { buildLoanWorkflowNotification } from '../notifications/banking-notification-builders';
+import { NotificationsService } from '../notifications/notifications.service';
+import { Transaction, TransactionDocument } from '../payments/schemas/transaction.schema';
+import { AutopaySetting, AutopaySettingDocument } from '../service-placeholders/schemas/autopay-setting.schema';
 import { StaffActivityLog, StaffActivityLogDocument } from '../staff-activity/schemas/staff-activity-log.schema';
 import { ProcessLoanActionDto } from './dto';
-import { LoanTransitionResult } from './interfaces';
+import {
+  LoanCustomerProfile,
+  LoanQueueAction,
+  LoanQueueDetail,
+  LoanQueueItem,
+  LoanTransitionResult,
+} from './interfaces';
 import { LoanWorkflowHistory, LoanWorkflowHistoryDocument } from './schemas/loan-workflow-history.schema';
 
 interface LoanTransitionState {
@@ -31,19 +42,291 @@ interface LoanTransitionState {
   clearAssignment?: boolean;
 }
 
+type LoanQueueActionSource = Pick<LoanQueueItem, 'amount' | 'level' | 'status'>;
+
 @Injectable()
 export class LoanWorkflowService {
   constructor(
     @InjectModel(Loan.name)
     private readonly loanModel: Model<LoanDocument>,
+    @InjectModel(Member.name)
+    private readonly memberModel: Model<MemberDocument>,
+    @InjectModel(Transaction.name)
+    private readonly transactionModel: Model<TransactionDocument>,
+    @InjectModel(AutopaySetting.name)
+    private readonly autopaySettingModel: Model<AutopaySettingDocument>,
+    @InjectModel(ChatConversation.name)
+    private readonly chatConversationModel: Model<ChatConversationDocument>,
     @InjectModel(LoanWorkflowHistory.name)
     private readonly workflowHistoryModel: Model<LoanWorkflowHistoryDocument>,
     @InjectModel(StaffActivityLog.name)
     private readonly staffActivityLogModel: Model<StaffActivityLogDocument>,
-    @InjectModel(Notification.name)
-    private readonly notificationModel: Model<NotificationDocument>,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  async getLoanQueue(currentUser: AuthenticatedUser): Promise<LoanQueueItem[]> {
+    this.ensureStaffAccess(currentUser);
+
+    const match: Record<string, unknown> = {
+      status: {
+        $in: [
+          LoanStatus.SUBMITTED,
+          LoanStatus.BRANCH_REVIEW,
+          LoanStatus.DISTRICT_REVIEW,
+          LoanStatus.HEAD_OFFICE_REVIEW,
+          LoanStatus.APPROVED,
+        ],
+      },
+    };
+
+    if (currentUser.branchId && currentUser.role === UserRole.BRANCH_MANAGER) {
+      match.branchId = new Types.ObjectId(currentUser.branchId);
+    }
+
+    if (
+      currentUser.districtId &&
+      [UserRole.DISTRICT_OFFICER, UserRole.DISTRICT_MANAGER].includes(
+        currentUser.role,
+      )
+    ) {
+      match.districtId = new Types.ObjectId(currentUser.districtId);
+    }
+
+    const items = await this.loanModel.aggregate<Omit<LoanQueueItem, 'availableActions'>>([
+      { $match: match },
+      {
+        $lookup: {
+          from: 'members',
+          localField: 'memberId',
+          foreignField: '_id',
+          as: 'member',
+        },
+      },
+      { $unwind: '$member' },
+      {
+        $project: {
+          _id: 0,
+          loanId: { $toString: '$_id' },
+          memberId: { $toString: '$memberId' },
+          customerId: '$member.customerId',
+          memberName: '$member.fullName',
+          amount: 1,
+          level: '$currentLevel',
+          status: 1,
+          branchId: { $toString: '$branchId' },
+          districtId: { $toString: '$districtId' },
+          deficiencyReasons: { $ifNull: ['$deficiencyReasons', []] },
+          updatedAt: {
+            $dateToString: {
+              date: '$updatedAt',
+              format: '%Y-%m-%dT%H:%M:%S.%LZ',
+            },
+          },
+        },
+      },
+      { $sort: { updatedAt: -1, amount: -1 } },
+    ]);
+
+    return items.map((item) => ({
+      ...item,
+      availableActions: this.buildAvailableActions(item),
+    }));
+  }
+
+  async getLoanQueueDetail(
+    currentUser: AuthenticatedUser,
+    loanId: string,
+  ): Promise<LoanQueueDetail> {
+    this.ensureStaffAccess(currentUser);
+
+    const baseScope: Record<string, unknown> = { _id: new Types.ObjectId(loanId) };
+
+    if (currentUser.branchId && currentUser.role === UserRole.BRANCH_MANAGER) {
+      baseScope.branchId = new Types.ObjectId(currentUser.branchId);
+    }
+
+    if (
+      currentUser.districtId &&
+      [UserRole.DISTRICT_OFFICER, UserRole.DISTRICT_MANAGER].includes(
+        currentUser.role,
+      )
+    ) {
+      baseScope.districtId = new Types.ObjectId(currentUser.districtId);
+    }
+
+    const [item] = await this.loanModel.aggregate<LoanQueueItem>([
+      { $match: baseScope },
+      {
+        $lookup: {
+          from: 'members',
+          localField: 'memberId',
+          foreignField: '_id',
+          as: 'member',
+        },
+      },
+      { $unwind: '$member' },
+      {
+        $project: {
+          _id: 0,
+          loanId: { $toString: '$_id' },
+          memberId: { $toString: '$memberId' },
+          customerId: '$member.customerId',
+          memberName: '$member.fullName',
+          amount: 1,
+          level: '$currentLevel',
+          status: 1,
+          branchId: { $toString: '$branchId' },
+          districtId: { $toString: '$districtId' },
+          deficiencyReasons: { $ifNull: ['$deficiencyReasons', []] },
+          updatedAt: {
+            $dateToString: {
+              date: '$updatedAt',
+              format: '%Y-%m-%dT%H:%M:%S.%LZ',
+            },
+          },
+        },
+      },
+    ]);
+
+    if (!item) {
+      throw new NotFoundException('Loan queue item was not found.');
+    }
+
+    const history = await this.workflowHistoryModel
+      .find({ loanId: new Types.ObjectId(loanId) })
+      .sort({ createdAt: 1 })
+      .lean<LoanWorkflowHistoryDocument[]>();
+
+    return {
+      ...item,
+      nextAction: this.buildNextActionGuidance(item),
+      availableActions: this.buildAvailableActions(item),
+      history: history.map((entry) => ({
+        action: entry.action,
+        level: entry.level,
+        fromStatus: entry.fromStatus,
+        toStatus: entry.toStatus,
+        actorRole: entry.actorRole,
+        comment: entry.comment,
+        createdAt: entry.createdAt?.toISOString(),
+      })),
+    };
+  }
+
+  async getLoanCustomerProfile(
+    currentUser: AuthenticatedUser,
+    loanId: string,
+  ): Promise<LoanCustomerProfile> {
+    this.ensureStaffAccess(currentUser);
+
+    const loan = await this.findAccessibleLoan(currentUser, loanId);
+
+    const member = await this.memberModel.findById(loan.memberId).lean<MemberDocument | null>();
+    if (!member) {
+      throw new NotFoundException('Loan customer was not found.');
+    }
+
+    const memberId = loan.memberId as Types.ObjectId;
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+    const [loans, repayments, autopaySettings, openLoanChats] = await Promise.all([
+      this.loanModel
+        .find({ memberId })
+        .sort({ createdAt: -1 })
+        .lean<LoanDocument[]>(),
+      this.transactionModel
+        .find({
+          memberId,
+          type: PaymentType.LOAN_REPAYMENT,
+          createdAt: { $gte: ninetyDaysAgo },
+        })
+        .sort({ createdAt: -1 })
+        .lean<TransactionDocument[]>(),
+      this.autopaySettingModel
+        .find({ memberId, enabled: true })
+        .lean<AutopaySettingDocument[]>(),
+      this.chatConversationModel
+        .find({
+          memberId,
+          category: 'loan_issue',
+          status: { $in: ['open', 'assigned', 'waiting_agent', 'waiting_customer'] },
+        })
+        .lean<ChatConversationDocument[]>(),
+    ]);
+
+    const activeStatuses = [
+      LoanStatus.SUBMITTED,
+      LoanStatus.BRANCH_REVIEW,
+      LoanStatus.DISTRICT_REVIEW,
+      LoanStatus.HEAD_OFFICE_REVIEW,
+      LoanStatus.APPROVED,
+      LoanStatus.DISBURSED,
+      LoanStatus.NEEDS_MORE_INFO,
+    ];
+    const activeLoans = loans.filter((item) => activeStatuses.includes(item.status));
+    const closedLoans = loans.filter((item) => item.status === LoanStatus.CLOSED);
+    const rejectedLoans = loans.filter((item) => item.status === LoanStatus.REJECTED);
+    const totalBorrowedAmount = loans.reduce((sum, item) => sum + item.amount, 0);
+    const totalClosedAmount = closedLoans.reduce((sum, item) => sum + item.amount, 0);
+    const repaymentCount90d = repayments.length;
+    const autopayServices = autopaySettings.map((item) => item.serviceType);
+    const autopayEnabled = autopayServices.length > 0;
+
+    const repaymentSignal: LoanCustomerProfile['repaymentSignal'] =
+      closedLoans.length > 0 && repaymentCount90d >= 2 && openLoanChats.length === 0
+        ? 'strong'
+        : repaymentCount90d > 0 || closedLoans.length > 0
+          ? 'steady'
+          : 'watch';
+
+    const loyaltyTier: LoanCustomerProfile['loyaltyTier'] =
+      repaymentSignal === 'strong' && closedLoans.length > 0
+        ? 'gold'
+        : repaymentSignal !== 'watch'
+          ? 'silver'
+          : 'watch';
+
+    const nextBestAction =
+      loyaltyTier === 'gold'
+        ? 'Offer loyalty review for top-up or pre-approved follow-up'
+        : activeLoans.length > 0 && !autopayEnabled
+          ? 'Offer loan repayment AutoPay or reminder support'
+          : openLoanChats.length > 0
+            ? 'Resolve open support issues before sending a new offer'
+            : 'Keep customer on a repayment and reminder watchlist';
+
+    const offerCue =
+      loyaltyTier === 'gold'
+        ? 'Strong repayment behavior can support a loyalty offer, renewal outreach, or top-up review.'
+        : loyaltyTier === 'silver'
+          ? 'Customer is showing usable repayment discipline. Offer reminders or AutoPay to improve stickiness.'
+          : 'Do not send a credit offer yet. Focus on support, reminders, or documentation completion first.';
+
+    return {
+      memberId: member._id.toString(),
+      customerId: member.customerId,
+      memberName: member.fullName,
+      branchId: member.branchId?.toString(),
+      districtId: member.districtId?.toString(),
+      activeLoans: activeLoans.length,
+      closedLoans: closedLoans.length,
+      rejectedLoans: rejectedLoans.length,
+      totalLoanCount: loans.length,
+      totalBorrowedAmount,
+      totalClosedAmount,
+      repaymentCount90d,
+      lastRepaymentAt: repayments[0]?.createdAt?.toISOString(),
+      autopayEnabled,
+      autopayServices,
+      repaymentSignal,
+      loyaltyTier,
+      nextBestAction,
+      offerCue,
+      openSupportCases: openLoanChats.length,
+      activeLoanStatuses: activeLoans.map((item) => item.status),
+    };
+  }
 
   async processAction(
     currentUser: AuthenticatedUser,
@@ -66,6 +349,7 @@ export class LoanWorkflowService {
 
     loan.status = transition.status;
     loan.currentLevel = transition.level;
+    loan.deficiencyReasons = this.resolveDeficiencyReasons(loan, dto);
 
     if (transition.clearAssignment) {
       loan.assignedToStaffId = undefined;
@@ -95,18 +379,32 @@ export class LoanWorkflowService {
       amount: loan.amount,
     });
 
-    await this.notificationModel.create({
-      userType: 'member',
-      userId: loan.memberId,
-      type: NotificationType.LOAN_STATUS,
-      status: 'sent',
-      title: this.buildNotificationTitle(transition.status),
-      message: this.buildNotificationMessage(transition.status, transition.level),
-      entityType: 'loan',
-      entityId: loan._id,
+    const notification = buildLoanWorkflowNotification({
+      action: dto.action,
+      status: transition.status,
+      level: transition.level,
+      deficiencyReasons: loan.deficiencyReasons ?? [],
     });
 
-    await this.auditService.log({
+    await this.notificationsService.createNotification({
+      userType: 'member',
+      userId: loan.memberId.toString(),
+      type: notification.type,
+      status: notification.status,
+      title: notification.title,
+      message: notification.message,
+      entityType: 'loan',
+      entityId: loan._id.toString(),
+      actionLabel: 'Open loan',
+      priority:
+        dto.action === LoanAction.RETURN_FOR_CORRECTION ||
+        dto.action === LoanAction.REJECT
+          ? 'high'
+          : 'normal',
+      deepLink: `/loans/${loan._id.toString()}`,
+    });
+
+    await this.auditService.logActorAction({
       actorId: currentUser.sub,
       actorRole: currentUser.role,
       actionType: `loan_${dto.action}`,
@@ -160,6 +458,31 @@ export class LoanWorkflowService {
     if (!roleMap[level].includes(currentUser.role)) {
       throw new ForbiddenException('User cannot process loans at this workflow level.');
     }
+  }
+
+  private async findAccessibleLoan(
+    currentUser: AuthenticatedUser,
+    loanId: string,
+  ): Promise<LoanDocument> {
+    const scope: Record<string, unknown> = { _id: new Types.ObjectId(loanId) };
+
+    if (currentUser.branchId && currentUser.role === UserRole.BRANCH_MANAGER) {
+      scope.branchId = new Types.ObjectId(currentUser.branchId);
+    }
+
+    if (
+      currentUser.districtId &&
+      [UserRole.DISTRICT_OFFICER, UserRole.DISTRICT_MANAGER].includes(currentUser.role)
+    ) {
+      scope.districtId = new Types.ObjectId(currentUser.districtId);
+    }
+
+    const loan = await this.loanModel.findOne(scope);
+    if (!loan) {
+      throw new NotFoundException('Loan queue item was not found.');
+    }
+
+    return loan;
   }
 
   private resolveTransition(
@@ -256,6 +579,107 @@ export class LoanWorkflowService {
     throw new BadRequestException('Loan cannot be forwarded from the current workflow level.');
   }
 
+  private resolveDeficiencyReasons(
+    loan: LoanDocument,
+    dto: ProcessLoanActionDto,
+  ): string[] {
+    if (dto.action === LoanAction.RETURN_FOR_CORRECTION) {
+      const reasons =
+        dto.deficiencyReasons
+          ?.map((item) => item.trim())
+          .filter((item) => item.length > 0) ?? [];
+
+      if (reasons.length === 0) {
+        throw new BadRequestException(
+          'Deficiency reasons are required when returning a loan for correction.',
+        );
+      }
+
+      return reasons;
+    }
+
+    if (
+      dto.action === LoanAction.APPROVE ||
+      dto.action === LoanAction.DISBURSE ||
+      dto.action === LoanAction.CLOSE
+    ) {
+      return [];
+    }
+
+    return loan.deficiencyReasons ?? [];
+  }
+
+  private buildNextActionGuidance(item: LoanQueueItem) {
+    if (item.deficiencyReasons.length > 0) {
+      return `Customer correction is required before approval: ${item.deficiencyReasons.join(', ')}.`;
+    }
+
+    if (item.level === LoanWorkflowLevel.BRANCH) {
+      return 'Continue branch review or forward the case if it exceeds branch approval limits.';
+    }
+
+    if (item.level === LoanWorkflowLevel.DISTRICT) {
+      return 'District team should complete review or escalate higher-value cases to head office.';
+    }
+
+    if (item.level === LoanWorkflowLevel.HEAD_OFFICE) {
+      return 'Head office should complete final controls, approve, or return for correction.';
+    }
+
+    return 'Review the latest workflow history and decide the next operational step.';
+  }
+
+  private buildAvailableActions(item: LoanQueueActionSource): LoanQueueAction[] {
+    const actions: LoanQueueAction[] = [];
+
+    if (
+      [
+        LoanStatus.SUBMITTED,
+        LoanStatus.BRANCH_REVIEW,
+        LoanStatus.DISTRICT_REVIEW,
+        LoanStatus.HEAD_OFFICE_REVIEW,
+      ].includes(item.status as LoanStatus)
+    ) {
+      actions.push(LoanAction.REVIEW, LoanAction.RETURN_FOR_CORRECTION);
+    }
+
+    if (
+      [LoanWorkflowLevel.BRANCH, LoanWorkflowLevel.DISTRICT].includes(
+        item.level as LoanWorkflowLevel,
+      ) &&
+      [LoanStatus.SUBMITTED, LoanStatus.BRANCH_REVIEW, LoanStatus.DISTRICT_REVIEW].includes(
+        item.status as LoanStatus,
+      )
+    ) {
+      actions.push(LoanAction.FORWARD);
+    }
+
+    if (this.canApproveAtCurrentLevel(item)) {
+      actions.push(LoanAction.APPROVE);
+    }
+
+    return actions;
+  }
+
+  private canApproveAtCurrentLevel(item: LoanQueueActionSource): boolean {
+    if (
+      ![
+        LoanStatus.SUBMITTED,
+        LoanStatus.BRANCH_REVIEW,
+        LoanStatus.DISTRICT_REVIEW,
+        LoanStatus.HEAD_OFFICE_REVIEW,
+      ].includes(item.status as LoanStatus)
+    ) {
+      return false;
+    }
+
+    if ((item.level as LoanWorkflowLevel) === LoanWorkflowLevel.HEAD_OFFICE) {
+      return true;
+    }
+
+    return item.amount <= BRANCH_MAX_APPROVAL_AMOUNT;
+  }
+
   private assertStatusIn(status: LoanStatus, allowed: LoanStatus[]) {
     if (!allowed.includes(status)) {
       throw new BadRequestException('Invalid loan state transition.');
@@ -273,39 +697,5 @@ export class LoanWorkflowService {
       default:
         return ActivityType.LOAN_REVIEWED;
     }
-  }
-
-  private buildNotificationTitle(status: LoanStatus): string {
-    switch (status) {
-      case LoanStatus.APPROVED:
-        return 'Loan Approved';
-      case LoanStatus.REJECTED:
-        return 'Loan Rejected';
-      case LoanStatus.DISBURSED:
-        return 'Loan Disbursed';
-      case LoanStatus.CLOSED:
-        return 'Loan Closed';
-      default:
-        return 'Loan Status Updated';
-    }
-  }
-
-  private buildNotificationMessage(
-    status: LoanStatus,
-    level: LoanWorkflowLevel,
-  ): string {
-    if (status === LoanStatus.DISTRICT_REVIEW) {
-      return 'Your loan has moved to district review.';
-    }
-
-    if (status === LoanStatus.HEAD_OFFICE_REVIEW) {
-      return 'Your loan has moved to head office review.';
-    }
-
-    if (status === LoanStatus.SUBMITTED) {
-      return 'Your loan has been returned for correction and resubmission.';
-    }
-
-    return `Your loan is now ${status} at ${level} level.`;
   }
 }

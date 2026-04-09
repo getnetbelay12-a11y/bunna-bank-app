@@ -16,6 +16,15 @@ export class Member {
   @Prop({ required: true, enum: MemberType, index: true })
   memberType!: MemberType;
 
+  @Prop({ default: false, index: true })
+  isShareholder!: boolean;
+
+  @Prop({ default: 0, min: 0 })
+  shares!: number;
+
+  @Prop({ trim: true, unique: true, sparse: true })
+  shareholderId?: string;
+
   @Prop({
     required: true,
     enum: [UserRole.MEMBER, UserRole.SHAREHOLDER_MEMBER],
@@ -37,6 +46,36 @@ export class Member {
 
   @Prop({ trim: true })
   email?: string;
+
+  @Prop({ trim: true })
+  telegramChatId?: string;
+
+  @Prop({ trim: true })
+  telegramUserId?: string;
+
+  @Prop({ trim: true })
+  telegramUsername?: string;
+
+  @Prop({ trim: true })
+  telegramFirstName?: string;
+
+  @Prop({ trim: true })
+  telegramLastName?: string;
+
+  @Prop({ default: false, index: true })
+  telegramSubscribed!: boolean;
+
+  @Prop()
+  telegramLinkedAt?: Date;
+
+  @Prop()
+  telegramLastMessageAt?: Date;
+
+  @Prop({ default: true })
+  optInLoanReminders!: boolean;
+
+  @Prop({ default: true })
+  optInInsuranceReminders!: boolean;
 
   @Prop({ trim: true, index: true })
   region?: string;

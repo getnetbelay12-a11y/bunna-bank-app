@@ -20,6 +20,8 @@ import { AssignChatDto, UpdateChatStatusDto } from './dto';
 @Roles(
   UserRole.SUPPORT_AGENT,
   UserRole.ADMIN,
+  UserRole.DISTRICT_OFFICER,
+  UserRole.DISTRICT_MANAGER,
   UserRole.HEAD_OFFICE_OFFICER,
   UserRole.HEAD_OFFICE_MANAGER,
   UserRole.BRANCH_MANAGER,

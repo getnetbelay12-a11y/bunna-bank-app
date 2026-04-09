@@ -83,7 +83,7 @@ flutter run
 ```
 
 Real API mode:
-- run with `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4000`
+- run with `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:4008`
 - mobile will use HTTP-first clients for member auth, profile, and savings
 - if backend/web are already running: `./infrastructure/start-local-stack.sh --seed` then launch Flutter separately
 

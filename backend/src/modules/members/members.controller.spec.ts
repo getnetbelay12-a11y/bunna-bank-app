@@ -48,7 +48,7 @@ describe('MembersController', () => {
 
   it('delegates createMember to the service', async () => {
     const currentUser = { sub: 'staff_1', role: 'admin' } as never;
-    const dto = { memberNumber: 'MBR-10003' } as never;
+    const dto = { memberNumber: 'BUN-100003' } as never;
 
     await controller.createMember(currentUser, dto);
 

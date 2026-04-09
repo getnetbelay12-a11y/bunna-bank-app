@@ -1,5 +1,12 @@
 import { NotificationCategory, NotificationChannel } from '../../common/enums';
 
+export interface ChannelNotificationAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+  cid?: string;
+}
+
 export interface ChannelNotificationPayload {
   channel: NotificationChannel;
   recipient: string;
@@ -8,6 +15,10 @@ export interface ChannelNotificationPayload {
   subject?: string;
   messageBody: string;
   htmlBody?: string;
+  actionLabel?: string;
+  deepLink?: string;
+  dataPayload?: Record<string, unknown>;
+  attachments?: ChannelNotificationAttachment[];
 }
 
 export interface ChannelNotificationResult {
@@ -22,6 +33,9 @@ export interface ChannelNotificationProvider {
 }
 
 export const EMAIL_NOTIFICATION_PROVIDER = Symbol('EMAIL_NOTIFICATION_PROVIDER');
+export const MOBILE_PUSH_NOTIFICATION_PROVIDER = Symbol(
+  'MOBILE_PUSH_NOTIFICATION_PROVIDER',
+);
 export const SMS_NOTIFICATION_PROVIDER = Symbol('SMS_NOTIFICATION_PROVIDER');
 export const TELEGRAM_NOTIFICATION_PROVIDER = Symbol('TELEGRAM_NOTIFICATION_PROVIDER');
 export const IN_APP_NOTIFICATION_PROVIDER = Symbol('IN_APP_NOTIFICATION_PROVIDER');

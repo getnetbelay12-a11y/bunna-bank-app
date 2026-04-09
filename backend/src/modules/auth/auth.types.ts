@@ -22,6 +22,7 @@ export interface CheckExistingAccountResult {
   exists: boolean;
   matchType?: 'phone' | 'fayda_fin' | 'national_id_data' | 'email';
   message: string;
+  customerId?: string;
 }
 
 export interface LoginResult extends AuthTokens {
@@ -31,17 +32,24 @@ export interface LoginResult extends AuthTokens {
     customerId?: string;
     memberType?: string;
     fullName?: string;
+    identifier?: string;
+    email?: string;
     memberNumber?: string;
     staffNumber?: string;
+    schoolId?: string;
+    schoolName?: string;
     branchId?: string;
     districtId?: string;
     branchName?: string;
     districtName?: string;
+    permissions?: string[];
     phone?: string;
     membershipStatus?: string;
     identityVerificationStatus?: string;
     featureFlags?: {
       voting: boolean;
+      announcements: boolean;
+      dividends: boolean;
       schoolPayment: boolean;
       loans: boolean;
       savings: boolean;

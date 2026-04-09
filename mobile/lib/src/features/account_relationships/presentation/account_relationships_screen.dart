@@ -1,15 +1,11 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../theme/cbe_bank_theme.dart';
+import '../../../../theme/amhara_brand_theme.dart';
 import '../../../app/app_scope.dart';
-import '../../../core/services/api_config.dart';
+import '../../../shared/widgets/upload_selector_card.dart';
 
 class AccountRelationshipsScreen extends StatefulWidget {
   const AccountRelationshipsScreen({super.key});
@@ -71,7 +67,7 @@ class _AccountRelationshipsScreenState extends State<AccountRelationshipsScreen>
                       Text(
                         'Selfie Required',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: cbeBlue,
+                              color: abayPrimary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
@@ -130,11 +126,13 @@ class _AccountRelationshipsScreenState extends State<AccountRelationshipsScreen>
                       : null,
                 ),
                 const SizedBox(height: 12),
-                _UploadCard(
+                UploadSelectorCard(
                   title: 'Fayda Document Upload',
                   actionLabel:
                       _faydaUpload == null ? 'Upload Fayda Document' : 'Replace Fayda Document',
-                  upload: _faydaUpload,
+                  selectedName: _faydaUpload?.name,
+                  selectedPath: _faydaUpload?.path,
+                  selectedKind: _faydaUpload?.kind,
                   onTap: () => _selectDocumentUpload(
                     title: 'Fayda Document Upload',
                     onSelected: (value) => setState(() => _faydaUpload = value),
@@ -144,11 +142,13 @@ class _AccountRelationshipsScreenState extends State<AccountRelationshipsScreen>
                       : null,
                 ),
                 const SizedBox(height: 12),
-                _UploadCard(
+                UploadSelectorCard(
                   title: 'Selfie Verification',
                   actionLabel:
                       _selfieUpload == null ? 'Take Selfie' : 'Retake Selfie',
-                  upload: _selfieUpload,
+                  selectedName: _selfieUpload?.name,
+                  selectedPath: _selfieUpload?.path,
+                  selectedKind: _selfieUpload?.kind,
                   onTap: () => _selectSelfieUpload(
                     onSelected: (value) => setState(() => _selfieUpload = value),
                   ),
@@ -192,54 +192,61 @@ class _AccountRelationshipsScreenState extends State<AccountRelationshipsScreen>
       );
       return;
     }
-    if (!ApiConfig.hasBaseUrl) {
-      setState(() {
-        _message = 'API_BASE_URL is not configured. Request was not sent.';
-      });
-      return;
-    }
-
     setState(() {
       _submitting = true;
       _message = null;
     });
-    final token = AppScope.of(context).services.sessionStore.accessToken;
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/account/add-member'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'memberName': _fullNameController.text.trim(),
-        'relationship': _relationshipType,
-        'phoneNumber': _phoneController.text.trim(),
-        'faydaDocument': _faydaUpload!.path,
-        'selfieImage': _selfieUpload!.path,
-      }),
-    );
+    final services = AppScope.of(context).services;
+    try {
+      final faydaUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _faydaUpload!.path,
+        originalFileName: _faydaUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'relationship_fayda',
+      );
+      final selfieUpload = await services.documentUploadApi.uploadDocument(
+        filePath: _selfieUpload!.path,
+        originalFileName: _selfieUpload!.name,
+        domain: 'service-requests',
+        entityId: _phoneController.text.trim(),
+        documentType: 'selfie',
+      );
+      final created = await services.serviceRequestApi.createRequest(
+        type: 'account_relationship',
+        title: 'Account relationship request',
+        description:
+            'Request to add a related member to the account after identity verification.',
+        payload: {
+          'memberName': _fullNameController.text.trim(),
+          'relationship': _relationshipType,
+          'phoneNumber': _phoneController.text.trim(),
+          'faydaDocument': faydaUpload.storageKey,
+          'selfieImage': selfieUpload.storageKey,
+        },
+        attachments: [
+          faydaUpload.storageKey,
+          selfieUpload.storageKey,
+        ],
+      );
 
-    if (!mounted) {
-      return;
-    }
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _submitting = false;
         _message =
-            'Relationship request submitted. Review status: ${data['status'] ?? 'pending_review'}';
+            'Relationship request submitted. Request ID: ${created.id} · Status: ${created.status}';
       });
-      return;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _submitting = false;
+        _message = error.toString().replaceFirst('Exception: ', '');
+      });
     }
-
-    setState(() {
-      _submitting = false;
-      _message = _extractErrorMessage(
-        response.body,
-        fallback: 'Unable to submit relationship request.',
-      );
-    });
   }
 
   Future<void> _selectDocumentUpload({
@@ -361,123 +368,6 @@ class _AccountRelationshipsScreenState extends State<AccountRelationshipsScreen>
       name: file.name,
       path: file.path ?? file.name,
       kind: 'file',
-    );
-  }
-
-  String _extractErrorMessage(String body, {required String fallback}) {
-    try {
-      final data = jsonDecode(body);
-      if (data is Map<String, dynamic> && data['message'] is String) {
-        return data['message'] as String;
-      }
-    } catch (_) {
-      // Ignore.
-    }
-    return fallback;
-  }
-}
-
-class _UploadCard extends StatelessWidget {
-  const _UploadCard({
-    required this.title,
-    required this.actionLabel,
-    required this.onTap,
-    required this.validator,
-    this.upload,
-  });
-
-  final String title;
-  final String actionLabel;
-  final VoidCallback onTap;
-  final String? Function() validator;
-  final _SelectedUpload? upload;
-
-  @override
-  Widget build(BuildContext context) {
-    return FormField<String>(
-      validator: (_) => validator(),
-      builder: (field) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Ink(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: field.hasError
-                      ? Theme.of(context).colorScheme.error
-                      : const Color(0xFFD8E3F5),
-                ),
-              ),
-              child: Row(
-                children: [
-                  _UploadPreview(upload: upload),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      upload == null
-                          ? '$title\n$actionLabel'
-                          : '$title\n${upload!.name}',
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right_rounded),
-                ],
-              ),
-            ),
-          ),
-          if (field.hasError) ...[
-            const SizedBox(height: 6),
-            Text(
-              field.errorText!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _UploadPreview extends StatelessWidget {
-  const _UploadPreview({required this.upload});
-
-  final _SelectedUpload? upload;
-
-  @override
-  Widget build(BuildContext context) {
-    if (upload == null) {
-      return Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(Icons.upload_file_rounded),
-      );
-    }
-    final file = File(upload!.path);
-    if (upload!.kind == 'image' && file.existsSync()) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.file(file, width: 56, height: 56, fit: BoxFit.cover),
-      );
-    }
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Icon(Icons.insert_drive_file_rounded),
     );
   }
 }

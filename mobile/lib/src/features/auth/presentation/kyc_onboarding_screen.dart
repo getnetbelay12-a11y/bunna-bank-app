@@ -6,17 +6,27 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/app_scope.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/models/index.dart';
+import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/app_input.dart';
+import '../../../shared/widgets/status_cards.dart';
+import 'onboarding_status_screen.dart';
 
 class KycOnboardingScreen extends StatefulWidget {
   const KycOnboardingScreen({
     super.key,
     required this.phoneNumber,
+    this.email,
   });
 
   static const routeName = '/kyc-onboarding';
 
   final String phoneNumber;
+  final String? email;
 
   @override
   State<KycOnboardingScreen> createState() => _KycOnboardingScreenState();
@@ -24,7 +34,7 @@ class KycOnboardingScreen extends StatefulWidget {
 
 class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
   static const _sampleRegions = <String>[
-    'Amhara',
+    'Bunna',
     'Oromia',
     'Addis Ababa',
     'Tigray',
@@ -40,37 +50,37 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
   ];
 
   static const _sampleBranches = <String, List<LocationBranchOption>>{
-    'Amhara|Gondar': [
+    'Bunna|Gondar': [
       LocationBranchOption(
         id: 'branch_gondar_main',
         name: 'Gondar Main Branch',
-        region: 'Amhara',
+        region: 'Bunna',
         city: 'Gondar',
       ),
       LocationBranchOption(
         id: 'branch_gondar_piazza',
         name: 'Gondar Piazza Branch',
-        region: 'Amhara',
+        region: 'Bunna',
         city: 'Gondar',
       ),
       LocationBranchOption(
         id: 'branch_gondar_university',
         name: 'Gondar University Branch',
-        region: 'Amhara',
+        region: 'Bunna',
         city: 'Gondar',
       ),
     ],
-    'Amhara|Bahir Dar': [
+    'Bunna|Bahir Dar': [
       LocationBranchOption(
         id: 'branch_bahir_dar_main',
         name: 'Bahir Dar Main Branch',
-        region: 'Amhara',
+        region: 'Bunna',
         city: 'Bahir Dar',
       ),
       LocationBranchOption(
         id: 'branch_bahir_dar_lake',
         name: 'Bahir Dar Lake Branch',
-        region: 'Amhara',
+        region: 'Bunna',
         city: 'Bahir Dar',
       ),
     ],
@@ -107,7 +117,7 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
   final _pinController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
 
-  String? _selectedRegion = 'Amhara';
+  String? _selectedRegion = 'Bunna';
   String? _selectedCity = 'Gondar';
   LocationBranchOption? _selectedBranch;
   String _verificationStatus = 'pending_verification';
@@ -129,16 +139,17 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final services = AppScope.of(context).services;
+    final progressSteps = _buildProgressSteps();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('KYC Onboarding')),
+    return AppScaffold(
+      title: 'KYC Onboarding',
+      showBack: true,
       resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: FutureBuilder<List<String>>(
+      body: FutureBuilder<List<String>>(
           future: services.locationApi.fetchRegions(),
           builder: (context, regionSnapshot) {
             final regions = _mergeRegions(regionSnapshot.data);
-            final region = _selectedRegion ?? 'Amhara';
+            final region = _selectedRegion ?? 'Bunna';
 
             return FutureBuilder<List<String>>(
               future: services.locationApi.fetchCities(region),
@@ -175,144 +186,186 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Finish account creation',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Provide your location, preferred branch, Fayda document uploads, selfie verification, and a secure PIN.',
+                            AppHeader(
+                              title: 'Account opening',
+                              subtitle: _headlineCopyForStatus(_verificationStatus),
                             ),
                             const SizedBox(height: 16),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE8F5FF),
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: const Color(0xFFB9DBFF),
-                                ),
-                              ),
-                              child: const Text(
-                                'Fayda front and back images plus a selfie are required for onboarding review.',
+                            AppCard(
+                              child: _OnboardingProgressCard(
+                                currentStatus: _verificationStatus,
+                                steps: progressSteps,
                               ),
                             ),
                             const SizedBox(height: 20),
-                            TextFormField(
-                              controller: _firstNameController,
-                              decoration: const InputDecoration(
-                                labelText: 'First Name',
-                              ),
-                              validator: (value) =>
-                                  (value == null || value.trim().isEmpty)
-                                      ? 'First name is required.'
-                                      : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _lastNameController,
-                              decoration: const InputDecoration(
-                                labelText: 'Last Name',
-                              ),
-                              validator: (value) =>
-                                  (value == null || value.trim().isEmpty)
-                                      ? 'Last name is required.'
-                                      : null,
-                            ),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                              initialValue: region,
-                              decoration: _dropdownDecoration(
-                                labelText: 'Select your region',
-                              ),
-                              items: regions
-                                  .map(
-                                    (item) => DropdownMenuItem<String>(
-                                      value: item,
-                                      child: Text(item),
+                            AppCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Onboarding status',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      AppBadge(
+                                        label: _verificationStatus
+                                            .replaceAll('_', ' ')
+                                            .toUpperCase(),
+                                        tone: _statusBadgeTone(
+                                          _verificationStatus,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  StatusBannerCard(
+                                    title: 'Current step',
+                                    message:
+                                        _statusBannerCopy(_verificationStatus),
+                                    tone: _statusCardTone(
+                                      _verificationStatus,
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedRegion = value;
-                                  _selectedCity = null;
-                                  _selectedBranch = null;
-                                });
-                              },
-                              validator: (value) =>
-                                  (value == null || value.isEmpty)
-                                      ? 'Region is required.'
-                                      : null,
-                            ),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                              initialValue: cities.contains(city) ? city : null,
-                              decoration: _dropdownDecoration(
-                                labelText: 'Select your city',
+                                  ),
+                                ],
                               ),
-                              items: cities
-                                  .map(
-                                    (item) => DropdownMenuItem<String>(
-                                      value: item,
-                                      child: Text(item),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedCity = value;
-                                  _selectedBranch = null;
-                                });
-                              },
-                              validator: (value) =>
-                                  (value == null || value.isEmpty)
-                                      ? 'City is required.'
-                                      : null,
                             ),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                              initialValue: selectedBranchId,
-                              decoration: _dropdownDecoration(
-                                labelText: 'Choose your preferred branch',
-                                helperText:
-                                    'Branch names are shown here. You do not need to know a branch ID.',
-                              ),
-                              items: branches
-                                  .map(
-                                    (item) => DropdownMenuItem<String>(
-                                      value: item.id,
-                                      child: Text(item.name),
+                            const SizedBox(height: 20),
+                            AppCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Personal details',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppInput(
+                                    controller: _firstNameController,
+                                    label: 'First Name',
+                                    validator: (value) =>
+                                        (value == null ||
+                                                value.trim().isEmpty)
+                                            ? 'First name is required.'
+                                            : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppInput(
+                                    controller: _lastNameController,
+                                    label: 'Last Name',
+                                    validator: (value) =>
+                                        (value == null ||
+                                                value.trim().isEmpty)
+                                            ? 'Last name is required.'
+                                            : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: region,
+                                    decoration: _dropdownDecoration(
+                                      labelText: 'Select your region',
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: branches.isEmpty
-                                  ? null
-                                  : (value) {
+                                    items: regions
+                                        .map(
+                                          (item) => DropdownMenuItem<String>(
+                                            value: item,
+                                            child: Text(item),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
                                       setState(() {
-                                        _selectedBranch = branches.firstWhere(
-                                          (item) => item.id == value,
-                                        );
+                                        _selectedRegion = value;
+                                        _selectedCity = null;
+                                        _selectedBranch = null;
                                       });
                                     },
-                              validator: (value) {
-                                if (branches.isNotEmpty &&
-                                    (value == null || value.isEmpty)) {
-                                  return 'Preferred branch is required.';
-                                }
-                                return null;
-                              },
-                            ),
-                            if (branches.isEmpty) ...[
-                              const SizedBox(height: 8),
-                              const Text(
-                                'We will recommend a nearby branch after submission.',
+                                    validator: (value) =>
+                                        (value == null || value.isEmpty)
+                                            ? 'Region is required.'
+                                            : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue:
+                                        cities.contains(city) ? city : null,
+                                    decoration: _dropdownDecoration(
+                                      labelText: 'Select your city',
+                                    ),
+                                    items: cities
+                                        .map(
+                                          (item) => DropdownMenuItem<String>(
+                                            value: item,
+                                            child: Text(item),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedCity = value;
+                                        _selectedBranch = null;
+                                      });
+                                    },
+                                    validator: (value) =>
+                                        (value == null || value.isEmpty)
+                                            ? 'City is required.'
+                                            : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: selectedBranchId,
+                                    decoration: _dropdownDecoration(
+                                      labelText:
+                                          'Choose your preferred branch',
+                                      helperText:
+                                          'Branch names are shown here. You do not need to know a branch ID.',
+                                    ),
+                                    items: branches
+                                        .map(
+                                          (item) => DropdownMenuItem<String>(
+                                            value: item.id,
+                                            child: Text(item.name),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: branches.isEmpty
+                                        ? null
+                                        : (value) {
+                                            setState(() {
+                                              _selectedBranch = branches
+                                                  .firstWhere(
+                                                (item) => item.id == value,
+                                              );
+                                            });
+                                          },
+                                    validator: (value) {
+                                      if (branches.isNotEmpty &&
+                                          (value == null ||
+                                              value.isEmpty)) {
+                                        return 'Preferred branch is required.';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                  if (branches.isEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'We will recommend a nearby branch after submission.',
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ],
+                            ),
                             const SizedBox(height: 16),
                             _UploadCard(
                               title: 'Fayda Front ID Upload',
@@ -369,54 +422,96 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                   ? 'Selfie verification is required.'
                                   : null,
                             ),
-                            const SizedBox(height: 12),
-                            InputDecorator(
-                              decoration: const InputDecoration(
-                                labelText: 'Verification Status',
-                              ),
-                              child: Text(
-                                _verificationStatus.replaceAll('_', ' '),
+                            const SizedBox(height: 8),
+                            AppCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Higher-risk verification checkpoint',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'A live selfie helps the bank compare the onboarding request with your Fayda documents before account activation, card issuance, or other sensitive services.',
+                                  ),
+                                  const SizedBox(height: 10),
+                                  AppBadge(
+                                    label: _selfieUpload == null
+                                        ? 'SELFIE NOT CAPTURED'
+                                        : 'SELFIE READY FOR REVIEW',
+                                    tone: _selfieUpload == null
+                                        ? AppBadgeTone.warning
+                                        : AppBadgeTone.success,
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _faydaFinController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Fayda FIN',
-                                helperText:
-                                    'This can be auto-filled later if extracted from uploaded Fayda documents.',
+                            AppCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Identity and PIN',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  InputDecorator(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Verification Status',
+                                    ),
+                                    child: Text(
+                                      _verificationStatus.replaceAll('_', ' '),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppInput(
+                                    controller: _faydaFinController,
+                                    keyboardType: TextInputType.number,
+                                    label: 'Fayda FIN',
+                                    helperText:
+                                        'This can be auto-filled later if extracted from uploaded Fayda documents.',
+                                    validator: (value) =>
+                                        (value == null ||
+                                                value.trim().length != 12)
+                                            ? 'Fayda FIN must be 12 digits.'
+                                            : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppInput(
+                                    controller: _pinController,
+                                    keyboardType: TextInputType.number,
+                                    obscureText: true,
+                                    maxLength: 6,
+                                    label: 'Choose PIN',
+                                    validator: (value) =>
+                                        (value == null ||
+                                                value.trim().isEmpty)
+                                            ? 'PIN is required.'
+                                            : null,
+                                  ),
+                                ],
                               ),
-                              validator: (value) =>
-                                  (value == null || value.trim().length != 12)
-                                      ? 'Fayda FIN must be 12 digits.'
-                                      : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _pinController,
-                              keyboardType: TextInputType.number,
-                              obscureText: true,
-                              maxLength: 6,
-                              decoration: const InputDecoration(
-                                labelText: 'Choose PIN',
-                              ),
-                              validator: (value) =>
-                                  (value == null || value.trim().isEmpty)
-                                      ? 'PIN is required.'
-                                      : null,
                             ),
                             if (_message != null) ...[
                               const SizedBox(height: 12),
                               Text(_message!),
                             ],
                             const SizedBox(height: 20),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: _submitting
-                                    ? null
-                                    : () async {
+                            AppButton(
+                              label: _submitting
+                                  ? 'Submitting...'
+                                  : 'Create Account',
+                              onPressed: _submitting
+                                  ? null
+                                  : () async {
                                         if (!_formKey.currentState!
                                             .validate()) {
                                           return;
@@ -435,10 +530,42 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
 
                                         setState(() {
                                           _submitting = true;
+                                          _verificationStatus =
+                                              'documents_submitted';
                                         });
 
                                         final navigator = Navigator.of(context);
                                         try {
+                                          final frontUpload = await services
+                                              .documentUploadApi
+                                              .uploadDocument(
+                                            filePath: _frontIdUpload!.path,
+                                            originalFileName:
+                                                _frontIdUpload!.name,
+                                            domain: 'onboarding',
+                                            entityId: widget.phoneNumber,
+                                            documentType: 'fayda_front',
+                                          );
+                                          final backUpload = await services
+                                              .documentUploadApi
+                                              .uploadDocument(
+                                            filePath: _backIdUpload!.path,
+                                            originalFileName:
+                                                _backIdUpload!.name,
+                                            domain: 'onboarding',
+                                            entityId: widget.phoneNumber,
+                                            documentType: 'fayda_back',
+                                          );
+                                          final selfieUpload = await services
+                                              .documentUploadApi
+                                              .uploadDocument(
+                                            filePath: _selfieUpload!.path,
+                                            originalFileName:
+                                                _selfieUpload!.name,
+                                            domain: 'onboarding',
+                                            entityId: widget.phoneNumber,
+                                            documentType: 'selfie',
+                                          );
                                           final result =
                                               await services.authApi.register(
                                             firstName: _firstNameController.text
@@ -446,6 +573,7 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                             lastName:
                                                 _lastNameController.text.trim(),
                                             phoneNumber: widget.phoneNumber,
+                                            email: widget.email,
                                             dateOfBirth: '1995-01-15',
                                             region: _selectedRegion ?? region,
                                             city: _selectedCity ?? city,
@@ -460,10 +588,11 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                             faydaFin:
                                                 _faydaFinController.text.trim(),
                                             faydaQrData:
-                                                'front:${_frontIdUpload!.path}|back:${_backIdUpload!.path}',
+                                                'front:${frontUpload.storageKey}|back:${backUpload.storageKey}|selfie:${selfieUpload.storageKey}',
                                             faydaFrontImage:
-                                                _frontIdUpload!.path,
-                                            faydaBackImage: _backIdUpload!.path,
+                                                frontUpload.storageKey,
+                                            faydaBackImage:
+                                                backUpload.storageKey,
                                             consentAccepted: true,
                                           );
 
@@ -473,13 +602,25 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
 
                                           setState(() {
                                             _verificationStatus =
-                                                'pending_verification';
+                                                'review_in_progress';
                                             _message =
                                                 '${result.message} Customer ID: ${result.customerId}';
                                             _submitting = false;
                                           });
-                                          navigator.popUntil(
-                                            (route) => route.isFirst,
+                                          navigator.pushReplacement(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  OnboardingStatusScreen(
+                                                customerId: result.customerId,
+                                                phoneNumber:
+                                                    widget.phoneNumber,
+                                                selectedBranchName:
+                                                    _selectedBranch?.name,
+                                                reviewStatus:
+                                                    _verificationStatus,
+                                                statusMessage: result.message,
+                                              ),
+                                            ),
                                           );
                                         } catch (error) {
                                           if (!mounted) {
@@ -487,6 +628,8 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                           }
                                           setState(() {
                                             _submitting = false;
+                                            _verificationStatus =
+                                                'needs_action';
                                           });
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
@@ -502,12 +645,6 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                           );
                                         }
                                       },
-                                child: Text(
-                                  _submitting
-                                      ? 'Submitting...'
-                                      : 'Create Account',
-                                ),
-                              ),
                             ),
                           ],
                         ),
@@ -519,7 +656,6 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
             );
           },
         ),
-      ),
     );
   }
 
@@ -534,6 +670,112 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
       return 'Selfie verification is required.';
     }
     return null;
+  }
+
+  List<_OnboardingStep> _buildProgressSteps() {
+    final documentsReady = _frontIdUpload != null && _backIdUpload != null;
+    final selfieReady = _selfieUpload != null;
+    final pinReady = _pinController.text.trim().isNotEmpty;
+
+    return [
+      const _OnboardingStep(
+        title: 'Phone and OTP',
+        description: 'Phone number verified before onboarding starts.',
+        state: _StepState.done,
+      ),
+      _OnboardingStep(
+        title: 'Profile and branch',
+        description: 'Region, city, and preferred branch captured.',
+        state: (_selectedRegion?.isNotEmpty == true &&
+                _selectedCity?.isNotEmpty == true)
+            ? _StepState.done
+            : _StepState.current,
+      ),
+      _OnboardingStep(
+        title: 'Fayda documents',
+        description: 'Front and back ID evidence prepared for review.',
+        state: documentsReady ? _StepState.done : _StepState.current,
+      ),
+      _OnboardingStep(
+        title: 'Selfie and PIN',
+        description: 'Higher-risk confirmation and secure PIN setup.',
+        state: selfieReady && pinReady ? _StepState.done : _StepState.upcoming,
+      ),
+      _OnboardingStep(
+        title: 'Review outcome',
+        description: _reviewOutcomeDescription(_verificationStatus),
+        state: _verificationStatus == 'review_in_progress'
+            ? _StepState.current
+            : _verificationStatus == 'approved'
+                ? _StepState.done
+                : _StepState.upcoming,
+      ),
+    ];
+  }
+
+  String _headlineCopyForStatus(String status) {
+    switch (status) {
+      case 'documents_submitted':
+        return 'Your onboarding package is being prepared for review. Confirm the remaining details and submit carefully.';
+      case 'review_in_progress':
+        return 'Your onboarding request is under review. Watch for follow-up requests if any document or selfie check needs attention.';
+      case 'needs_action':
+        return 'Some onboarding details still need attention. Review the highlighted fields and submit again.';
+      default:
+        return 'Provide your location, preferred branch, Fayda document uploads, selfie verification, and a secure PIN.';
+    }
+  }
+
+  String _statusBannerCopy(String status) {
+    switch (status) {
+      case 'documents_submitted':
+        return 'Fayda documents and selfie evidence are staged. Submit now to move the account into review.';
+      case 'review_in_progress':
+        return 'The onboarding request is now pending branch and verification review.';
+      case 'needs_action':
+        return 'The last submission needs correction before it can move forward.';
+      default:
+        return 'Fayda front and back images plus a selfie are required for onboarding review.';
+    }
+  }
+
+  StatusCardTone _statusCardTone(String status) {
+    switch (status) {
+      case 'approved':
+        return StatusCardTone.success;
+      case 'needs_action':
+        return StatusCardTone.warning;
+      case 'review_in_progress':
+      case 'documents_submitted':
+        return StatusCardTone.info;
+      default:
+        return StatusCardTone.info;
+    }
+  }
+
+  AppBadgeTone _statusBadgeTone(String status) {
+    switch (status) {
+      case 'approved':
+        return AppBadgeTone.success;
+      case 'needs_action':
+        return AppBadgeTone.warning;
+      case 'review_in_progress':
+      case 'documents_submitted':
+        return AppBadgeTone.primary;
+      default:
+        return AppBadgeTone.neutral;
+    }
+  }
+
+  String _reviewOutcomeDescription(String status) {
+    switch (status) {
+      case 'review_in_progress':
+        return 'Branch and KYC teams are checking your documents and selfie.';
+      case 'approved':
+        return 'Identity review completed successfully.';
+      default:
+        return 'After submission, the app will show whether review is pending or further action is required.';
+    }
   }
 
   Future<void> _selectDocumentUpload({
@@ -905,4 +1147,111 @@ String _extractErrorMessage(Object error, {required String fallback}) {
     return fallback;
   }
   return text;
+}
+
+enum _StepState { done, current, upcoming }
+
+class _OnboardingStep {
+  const _OnboardingStep({
+    required this.title,
+    required this.description,
+    required this.state,
+  });
+
+  final String title;
+  final String description;
+  final _StepState state;
+}
+
+class _OnboardingProgressCard extends StatelessWidget {
+  const _OnboardingProgressCard({
+    required this.currentStatus,
+    required this.steps,
+  });
+
+  final String currentStatus;
+  final List<_OnboardingStep> steps;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD8E3F5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Onboarding Progress',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Current status: ${currentStatus.replaceAll('_', ' ')}',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF475569),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 16),
+          for (final step in steps) ...[
+            _ProgressRow(step: step),
+            if (step != steps.last) const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressRow extends StatelessWidget {
+  const _ProgressRow({required this.step});
+
+  final _OnboardingStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = switch (step.state) {
+      _StepState.done => (Icons.check_circle_rounded, const Color(0xFF047857)),
+      _StepState.current => (Icons.radio_button_checked_rounded, const Color(0xFF0F4CBA)),
+      _StepState.upcoming => (Icons.radio_button_unchecked_rounded, const Color(0xFF94A3B8)),
+    };
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                step.title,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                step.description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF64748B),
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
