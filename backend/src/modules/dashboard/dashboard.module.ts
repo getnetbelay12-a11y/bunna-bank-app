@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuditModule } from '../audit/audit.module';
+import { AuthModule } from '../auth/auth.module';
 import { ChatConversation, ChatConversationSchema } from '../chat/schemas/chat-conversation.schema';
 import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
 import { Branch, BranchSchema } from '../members/schemas/branch.schema';
@@ -21,6 +22,11 @@ import { StaffPerformanceWeekly, StaffPerformanceWeeklySchema } from '../staff-a
 import { StaffPerformanceYearly, StaffPerformanceYearlySchema } from '../staff-activity/schemas/staff-performance-yearly.schema';
 import { VoteResponse, VoteResponseSchema } from '../voting/schemas/vote-response.schema';
 import { Vote, VoteSchema } from '../voting/schemas/vote.schema';
+import {
+  OnboardingEvidence,
+  OnboardingEvidenceSchema,
+} from '../auth/schemas/onboarding-evidence.schema';
+import { UploadsModule } from '../uploads/uploads.module';
 import { CommandCenterController } from './command-center.controller';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
@@ -32,6 +38,8 @@ import { RiskService } from './risk.service';
 @Module({
   imports: [
     AuditModule,
+    AuthModule,
+    UploadsModule,
     MongooseModule.forFeature([
       { name: Loan.name, schema: LoanSchema },
       { name: Branch.name, schema: BranchSchema },
@@ -48,6 +56,7 @@ import { RiskService } from './risk.service';
       { name: VoteResponse.name, schema: VoteResponseSchema },
       { name: Member.name, schema: MemberSchema },
       { name: MemberProfileEntity.name, schema: MemberProfileSchema },
+      { name: OnboardingEvidence.name, schema: OnboardingEvidenceSchema },
       { name: SavingsAccount.name, schema: SavingsAccountSchema },
       { name: ChatConversation.name, schema: ChatConversationSchema },
       { name: NotificationCampaign.name, schema: NotificationCampaignSchema },

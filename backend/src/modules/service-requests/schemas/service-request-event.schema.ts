@@ -24,7 +24,15 @@ export class ServiceRequestEvent {
   actorName?: string;
 
   @Prop({ required: true, trim: true })
-  eventType!: 'created' | 'status_updated' | 'cancelled';
+  eventType!:
+    | 'created'
+    | 'status_updated'
+    | 'cancelled'
+    | 'assigned'
+    | 'security_review_created'
+    | 'sla_breached'
+    | 'investigation_stalled'
+    | 'stalled_case_escalated';
 
   @Prop({ enum: ServiceRequestStatus })
   fromStatus?: ServiceRequestStatus;

@@ -161,6 +161,10 @@ export function validateEnvironment(config: EnvironmentRecord): EnvironmentRecor
   );
   const mongoConnection = parseMongoConnectionDetails(mongodbUri);
   const jwtSecret = requireSecret(config, 'JWT_SECRET', 16);
+  const auditDigestSecret = readString(config, 'AUDIT_DIGEST_SECRET', jwtSecret);
+  if (auditDigestSecret.length < 16) {
+    throw new Error('Environment variable AUDIT_DIGEST_SECRET must be at least 16 characters.');
+  }
   const otpSigningSecret = requireSecret(config, 'OTP_SIGNING_SECRET', 16);
   const storageProvider = requireEnumValue(
     'STORAGE_PROVIDER',
@@ -181,6 +185,7 @@ export function validateEnvironment(config: EnvironmentRecord): EnvironmentRecor
     MONGODB_DATABASE_NAME: mongoConnection.databaseName,
     MONGODB_HOST: mongoConnection.host,
     JWT_SECRET: jwtSecret,
+    AUDIT_DIGEST_SECRET: auditDigestSecret,
     JWT_EXPIRES_IN: readString(config, 'JWT_EXPIRES_IN', '1d'),
     JWT_REFRESH_EXPIRES_IN: readString(config, 'JWT_REFRESH_EXPIRES_IN', '7d'),
     FIREBASE_PROJECT_ID: readString(config, 'FIREBASE_PROJECT_ID'),
@@ -246,6 +251,18 @@ export function validateEnvironment(config: EnvironmentRecord): EnvironmentRecor
       { min: 0 },
     ),
     OTP_SIGNING_SECRET: otpSigningSecret,
+    REPORTING_SNAPSHOT_LOOKBACK_DAYS: readNumber(
+      config,
+      'REPORTING_SNAPSHOT_LOOKBACK_DAYS',
+      14,
+      { min: 1 },
+    ),
+    REPORTING_SNAPSHOT_LOCK_MINUTES: readNumber(
+      config,
+      'REPORTING_SNAPSHOT_LOCK_MINUTES',
+      10,
+      { min: 1 },
+    ),
   };
 }
 

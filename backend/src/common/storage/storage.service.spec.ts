@@ -89,11 +89,13 @@ describe('StorageService', () => {
     expect(result.storageKey).toContain('kyc/member_1/');
     expect(result.absolutePath).toBeDefined();
     expect(result.sizeBytes).toBe(Buffer.from('fake-binary-document').byteLength);
+    expect(result.sha256Hash).toHaveLength(64);
 
     const contents = await readFile(result.absolutePath!);
     expect(contents.toString()).toBe('fake-binary-document');
     const metadata = await readFile(`${result.absolutePath!}.json`, 'utf8');
     expect(metadata).toContain('"documentType": "fayda_front"');
+    expect(metadata).toContain('"sha256Hash"');
   });
 
   it('reads stored binary documents and preserves metadata', async () => {
@@ -126,6 +128,7 @@ describe('StorageService', () => {
     expect(result.mimeType).toBe('image/png');
     expect(result.buffer.toString()).toBe('evidence-bytes');
     expect(result.sizeBytes).toBe(Buffer.from('evidence-bytes').byteLength);
+    expect(result.sha256Hash).toHaveLength(64);
   });
 
   it('reads stored document metadata without loading content into callers', async () => {
@@ -157,5 +160,6 @@ describe('StorageService', () => {
     expect(result.originalFileName).toBe('selfie.jpg');
     expect(result.mimeType).toBe('image/jpeg');
     expect(result.sizeBytes).toBe(Buffer.from('selfie-bytes').byteLength);
+    expect(result.sha256Hash).toHaveLength(64);
   });
 });

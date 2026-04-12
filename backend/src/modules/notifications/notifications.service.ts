@@ -26,6 +26,8 @@ import { Notification, NotificationDocument } from './schemas/notification.schem
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
+  private static readonly SECURITY_BREACH_DIGEST_WINDOW_MS = 15 * 60 * 1000;
+  private static readonly SECURITY_STALL_DIGEST_WINDOW_MS = 15 * 60 * 1000;
 
   constructor(
     @InjectModel(Notification.name)
@@ -74,6 +76,148 @@ export class NotificationsService {
       status: dto.status ?? dispatchResult?.status ?? NotificationStatus.FAILED,
       deliveredAt: dispatchResult?.deliveredAt,
     });
+  }
+
+  async notifyStaffSecurityBreachDigest(input: {
+    userId: string;
+    userRole: UserRole;
+    serviceRequestId: string;
+  }): Promise<NotificationResult> {
+    const cutoff = new Date(
+      Date.now() - NotificationsService.SECURITY_BREACH_DIGEST_WINDOW_MS,
+    );
+    const existing = await this.notificationModel
+      .findOne({
+        userType: 'staff',
+        userId: new Types.ObjectId(input.userId),
+        type: NotificationType.SYSTEM,
+        title: 'Security review SLA breached',
+        priority: 'high',
+        status: { $ne: NotificationStatus.READ },
+        createdAt: { $gte: cutoff },
+      })
+      .sort({ createdAt: -1 });
+
+    if (!existing) {
+      return this.createNotification({
+        userType: 'staff',
+        userId: input.userId,
+        userRole: input.userRole,
+        type: NotificationType.SYSTEM,
+        title: 'Security review SLA breached',
+        message: '1 security review SLA breach requires head office attention.',
+        entityType: 'service_request',
+        entityId: input.serviceRequestId,
+        actionLabel: 'Open security review',
+        priority: 'high',
+        deepLink: '/console/head-office?section=serviceRequests',
+        dataPayload: {
+          securityBreachDigestCount: 1,
+          serviceRequestIds: [input.serviceRequestId],
+          latestServiceRequestId: input.serviceRequestId,
+          escalationState: 'breached_head_office_attention_required',
+        },
+      });
+    }
+
+    const currentIds = Array.isArray(existing.dataPayload?.serviceRequestIds)
+      ? existing.dataPayload?.serviceRequestIds.filter(
+          (value): value is string => typeof value === 'string' && value.trim().length > 0,
+        )
+      : [];
+    const nextIds = Array.from(new Set([...currentIds, input.serviceRequestId]));
+    const nextCount =
+      typeof existing.dataPayload?.securityBreachDigestCount === 'number'
+        ? Math.max(existing.dataPayload.securityBreachDigestCount, nextIds.length)
+        : nextIds.length;
+
+    existing.message = `${nextCount} security review SLA breaches require head office attention.`;
+    existing.entityType = 'service_request';
+    existing.entityId = new Types.ObjectId(input.serviceRequestId);
+    existing.actionLabel = 'Open security review';
+    existing.priority = 'high';
+    existing.deepLink = '/console/head-office?section=serviceRequests';
+    existing.dataPayload = {
+      ...(existing.dataPayload ?? {}),
+      securityBreachDigestCount: nextCount,
+      serviceRequestIds: nextIds,
+      latestServiceRequestId: input.serviceRequestId,
+      escalationState: 'breached_head_office_attention_required',
+    };
+    await existing.save();
+
+    return this.toResult(existing);
+  }
+
+  async notifyStaffSecurityInvestigationStalledDigest(input: {
+    userId: string;
+    userRole: UserRole;
+    serviceRequestId: string;
+  }): Promise<NotificationResult> {
+    const cutoff = new Date(
+      Date.now() - NotificationsService.SECURITY_STALL_DIGEST_WINDOW_MS,
+    );
+    const existing = await this.notificationModel
+      .findOne({
+        userType: 'staff',
+        userId: new Types.ObjectId(input.userId),
+        type: NotificationType.SYSTEM,
+        title: 'Security investigation stalled',
+        priority: 'high',
+        status: { $ne: NotificationStatus.READ },
+        createdAt: { $gte: cutoff },
+      })
+      .sort({ createdAt: -1 });
+
+    if (!existing) {
+      return this.createNotification({
+        userType: 'staff',
+        userId: input.userId,
+        userRole: input.userRole,
+        type: NotificationType.SYSTEM,
+        title: 'Security investigation stalled',
+        message: '1 acknowledged security review still has no active investigation.',
+        entityType: 'service_request',
+        entityId: input.serviceRequestId,
+        actionLabel: 'Open stalled review',
+        priority: 'high',
+        deepLink: '/console/head-office?section=serviceRequests',
+        dataPayload: {
+          securityInvestigationStallCount: 1,
+          serviceRequestIds: [input.serviceRequestId],
+          latestServiceRequestId: input.serviceRequestId,
+          escalationState: 'acknowledged_but_investigation_not_started',
+        },
+      });
+    }
+
+    const currentIds = Array.isArray(existing.dataPayload?.serviceRequestIds)
+      ? existing.dataPayload?.serviceRequestIds.filter(
+          (value): value is string => typeof value === 'string' && value.trim().length > 0,
+        )
+      : [];
+    const nextIds = Array.from(new Set([...currentIds, input.serviceRequestId]));
+    const nextCount =
+      typeof existing.dataPayload?.securityInvestigationStallCount === 'number'
+        ? Math.max(existing.dataPayload.securityInvestigationStallCount, nextIds.length)
+        : nextIds.length;
+
+    existing.message = `${nextCount} acknowledged security reviews still have no active investigation.`;
+    existing.entityType = 'service_request';
+    existing.entityId = new Types.ObjectId(input.serviceRequestId);
+    existing.actionLabel = 'Open stalled review';
+    existing.priority = 'high';
+    existing.deepLink = '/console/head-office?section=serviceRequests';
+    existing.dataPayload = {
+      ...(existing.dataPayload ?? {}),
+      securityInvestigationStallCount: nextCount,
+      serviceRequestIds: nextIds,
+      latestServiceRequestId: input.serviceRequestId,
+      escalationState: 'acknowledged_but_investigation_not_started',
+    };
+    await existing.save();
+
+    return this.toResult(existing);
   }
 
   async storeNotificationRecord(

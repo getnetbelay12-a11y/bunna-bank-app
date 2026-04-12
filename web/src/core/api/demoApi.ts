@@ -1,6 +1,7 @@
 import {
   type AuditApi,
   type AuditLogItem,
+  type AuditLogVerificationResult,
   type AuthApi,
   type BranchCommandCenterSummary,
   type BulkInvoiceReminderResult,
@@ -41,6 +42,7 @@ import {
   type NotificationCenterItem,
   type NotificationLogItem,
   type NotificationTemplateItem,
+  type OnboardingEvidenceDetail,
   type OnboardingReviewItem,
   type PerformancePeriod,
   type PerformanceSummaryItem,
@@ -49,6 +51,7 @@ import {
   type SchoolCollectionItem,
   type SchoolConsoleApi,
   type SchoolConsoleOverview,
+  type SecurityReviewMetrics,
   type InvoiceBatchGenerationResult,
   type InvoiceReminderResult,
   type SchoolInvoiceItem,
@@ -287,6 +290,21 @@ export class DemoAuthApi implements AuthApi {
     return {
       exists: false,
       message: 'No existing account was found. You can continue onboarding.',
+    };
+  }
+
+  async verifyStaffStepUp(payload: { password: string; memberId: string }) {
+    await wait(80);
+
+    if (payload.password !== 'demo-pass') {
+      throw new Error('Invalid credentials.');
+    }
+
+    return {
+      stepUpToken: 'demo-step-up-token',
+      verifiedAt: '2026-03-18T12:00:00.000Z',
+      expiresInSeconds: 300,
+      method: 'password_recheck',
     };
   }
 }
@@ -705,7 +723,12 @@ export class DemoServiceRequestApi implements ServiceRequestApi {
       title: item.title,
       description: item.description,
       status: item.status,
+      payload: item.payload,
+      dueAt: item.dueAt,
+      slaState: item.slaState,
       latestNote: item.latestNote,
+      assignedToStaffId: item.assignedToStaffId,
+      assignedToStaffName: item.assignedToStaffName,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }));
@@ -724,6 +747,216 @@ export class DemoServiceRequestApi implements ServiceRequestApi {
       demoServiceRequests.find((item) => item.id === requestId) ??
       demoServiceRequests[0]
     );
+  }
+
+  async getSecurityReviewMetrics(): Promise<SecurityReviewMetrics> {
+    await wait(60);
+    return buildDemoSecurityReviewMetrics(demoServiceRequests);
+  }
+
+  async reportSecurityReviewMetricsContractIssue(): Promise<{ ok: true }> {
+    await wait(40);
+    return { ok: true };
+  }
+
+  async createSecurityReview(payload: {
+    memberId: string;
+    memberLabel: string;
+    reviewerLabel: string;
+    failureCount: number;
+    escalationThreshold: number;
+    latestFailureAt: string;
+    reasonCodes?: string[];
+    auditIds?: string[];
+  }) {
+    await wait(120);
+
+    const existing = demoServiceRequests.find(
+      (item) =>
+        item.memberId === payload.memberId &&
+        item.type === 'security_review' &&
+        !['completed', 'rejected', 'cancelled'].includes(item.status),
+    );
+
+    if (existing) {
+      throw new Error(`An active security review already exists for ${payload.memberLabel}.`);
+    }
+
+    const created: ServiceRequestDetail = {
+      id: `svc_security_${demoServiceRequests.length + 1}`,
+      memberId: payload.memberId,
+      customerId: `BUN-${payload.memberId.slice(-6).padStart(6, '0')}`,
+      memberName: payload.memberLabel,
+      branchName: 'Head Office Review',
+      type: 'security_review',
+      title: `Security review: repeated step-up failures for ${payload.memberLabel}`,
+      description: `${payload.failureCount} failed high-risk step-up attempts were observed in the last 7 days.`,
+      status: 'submitted',
+      dueAt: '2026-03-13T11:15:00.000Z',
+      slaState: 'on_track',
+      investigationStartedAt: undefined,
+      investigationStartedBy: undefined,
+      investigationStalledAt: undefined,
+      escalatedAt: undefined,
+      escalatedBy: undefined,
+      followUpState: 'not_breached',
+      breachAcknowledgedAt: undefined,
+      breachAcknowledgedBy: undefined,
+      latestNote: 'Flagged from the audit step-up failure watchlist.',
+      createdAt: '2026-03-12T11:15:00.000Z',
+      updatedAt: '2026-03-12T11:15:00.000Z',
+      payload: {
+        source: 'audit_step_up_failure_watchlist',
+        queue: 'security_review',
+        slaHours: 24,
+        dueAt: '2026-03-13T11:15:00.000Z',
+        escalationRole: 'head_office_manager',
+        failureCount7d: payload.failureCount,
+        escalationThreshold: payload.escalationThreshold,
+        latestFailureAt: payload.latestFailureAt,
+        reviewerLabel: payload.reviewerLabel,
+        memberLabel: payload.memberLabel,
+        reasonCodes: payload.reasonCodes ?? [],
+        relatedAuditIds: payload.auditIds ?? [],
+      },
+      attachments: [],
+      assignedToStaffId: 'staff_head_office_1',
+      assignedToStaffName: 'Demo Head Office Reviewer',
+      timeline: [
+        {
+          id: `svc_security_evt_${demoServiceRequests.length + 1}`,
+          actorType: 'staff',
+          actorName: 'Demo Head Office Reviewer',
+          eventType: 'security_review_created',
+          toStatus: 'submitted',
+          note: 'Created from repeated step-up failure watchlist.',
+          createdAt: '2026-03-12T11:15:00.000Z',
+        },
+      ],
+    };
+
+    demoServiceRequests.unshift(created);
+    return created;
+  }
+
+  async assignToCurrentReviewer(requestId: string) {
+    await wait(120);
+    const current =
+      demoServiceRequests.find((item) => item.id === requestId) ?? demoServiceRequests[0];
+
+    const updated: ServiceRequestDetail = {
+      ...current,
+      latestNote: 'Assigned to Demo Head Office Reviewer for active investigation.',
+      assignedToStaffId: 'staff_head_office_1',
+      assignedToStaffName: 'Demo Head Office Reviewer',
+      slaState: current.slaState ?? 'on_track',
+      investigationStartedAt:
+        current.investigationStartedAt ?? '2026-03-12T12:05:00.000Z',
+      investigationStartedBy:
+        current.investigationStartedBy ?? 'Demo Head Office Reviewer',
+      updatedAt: '2026-03-12T12:05:00.000Z',
+      timeline: [
+        ...(current.timeline ?? []),
+        {
+          id: `${current.id}_evt_assign_${(current.timeline?.length ?? 0) + 1}`,
+          actorType: 'staff',
+          actorName: 'Demo Head Office Reviewer',
+          eventType: 'assigned',
+          fromStatus: current.status,
+          toStatus: current.status,
+          note: 'Assigned to Demo Head Office Reviewer for active investigation.',
+          createdAt: '2026-03-12T12:05:00.000Z',
+        },
+      ],
+    };
+
+    const index = demoServiceRequests.findIndex((item) => item.id === current.id);
+    if (index >= 0) {
+      demoServiceRequests[index] = updated;
+    }
+
+    return updated;
+  }
+
+  async acknowledgeBreach(requestId: string) {
+    await wait(120);
+    const current =
+      demoServiceRequests.find((item) => item.id === requestId) ?? demoServiceRequests[0];
+
+    const updated: ServiceRequestDetail = {
+      ...current,
+      breachAcknowledgedAt:
+        current.breachAcknowledgedAt ?? '2026-03-12T12:10:00.000Z',
+      breachAcknowledgedBy:
+        current.breachAcknowledgedBy ?? 'Demo Head Office Reviewer',
+      followUpState:
+        current.investigationStartedAt != null
+          ? 'investigation_started'
+          : 'awaiting_investigation',
+      latestNote: 'SLA breach acknowledged by Demo Head Office Reviewer.',
+      updatedAt: '2026-03-12T12:10:00.000Z',
+      timeline: [
+        ...(current.timeline ?? []),
+        {
+          id: `${current.id}_evt_ack_${(current.timeline?.length ?? 0) + 1}`,
+          actorType: 'staff',
+          actorName: 'Demo Head Office Reviewer',
+          eventType: 'status_updated',
+          fromStatus: current.status,
+          toStatus: current.status,
+          note: 'SLA breach acknowledged by Demo Head Office Reviewer.',
+          createdAt: '2026-03-12T12:10:00.000Z',
+        },
+      ],
+    };
+
+    const index = demoServiceRequests.findIndex((item) => item.id === current.id);
+    if (index >= 0) {
+      demoServiceRequests[index] = updated;
+    }
+
+    return updated;
+  }
+
+  async escalateStalled(requestId: string) {
+    await wait(120);
+    const current =
+      demoServiceRequests.find((item) => item.id === requestId) ?? demoServiceRequests[0];
+
+    const updated: ServiceRequestDetail = {
+      ...current,
+      assignedToStaffId: 'staff_head_office_manager_1',
+      assignedToStaffName: 'Demo Head Office Manager',
+      escalatedAt: '2026-03-12T14:20:00.000Z',
+      escalatedBy: 'Demo Head Office Manager',
+      investigationStartedAt:
+        current.investigationStartedAt ?? '2026-03-12T14:20:00.000Z',
+      investigationStartedBy:
+        current.investigationStartedBy ?? 'Demo Head Office Manager',
+      followUpState: 'investigation_started',
+      latestNote: 'Stalled investigation escalated to Demo Head Office Manager.',
+      updatedAt: '2026-03-12T14:20:00.000Z',
+      timeline: [
+        ...(current.timeline ?? []),
+        {
+          id: `${current.id}_evt_escalate_${(current.timeline?.length ?? 0) + 1}`,
+          actorType: 'staff',
+          actorName: 'Demo Head Office Manager',
+          eventType: 'assigned',
+          fromStatus: current.status,
+          toStatus: current.status,
+          note: 'Stalled investigation escalated to Demo Head Office Manager.',
+          createdAt: '2026-03-12T14:20:00.000Z',
+        },
+      ],
+    };
+
+    const index = demoServiceRequests.findIndex((item) => item.id === current.id);
+    if (index >= 0) {
+      demoServiceRequests[index] = updated;
+    }
+
+    return updated;
   }
 
   async downloadAttachment(storageKey: string): Promise<Blob> {
@@ -769,6 +1002,71 @@ export class DemoServiceRequestApi implements ServiceRequestApi {
       ],
     };
   }
+}
+
+function buildDemoSecurityReviewMetrics(items: ServiceRequestDetail[]): SecurityReviewMetrics {
+  const securityReviewItems = items.filter((item) => item.type === 'security_review');
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const currentWindowStart = now - sevenDaysMs;
+  const previousWindowStart = now - 2 * sevenDaysMs;
+  const parseTimestamp = (value?: string) => {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  };
+  const countWithinWindow = (
+    selector: (item: ServiceRequestDetail) => string | undefined,
+    start: number,
+    end?: number,
+  ) =>
+    securityReviewItems.filter((item) => {
+      const timestamp = parseTimestamp(selector(item));
+      return timestamp != null && timestamp >= start && (end == null || timestamp < end);
+    }).length;
+
+  return {
+    metadata: {
+      contractVersion: 'security_review_metrics.v2',
+      currentStateBasis: 'live_service_request_state',
+      historyBasis: 'retained_daily_aggregates_with_event_fallback',
+      historyEventTypes: ['investigation_stalled', 'stalled_case_escalated'],
+      retentionWindowDays: 14,
+    },
+    currentState: {
+      openCount: securityReviewItems.filter(
+        (item) => !['completed', 'rejected', 'cancelled'].includes(item.status),
+      ).length,
+      breachedCount: securityReviewItems.filter((item) => item.slaState === 'overdue').length,
+      dueSoonCount: securityReviewItems.filter((item) => item.slaState === 'due_soon').length,
+      stalledCount: securityReviewItems.filter(
+        (item) => item.followUpState === 'investigation_stalled',
+      ).length,
+      takeoverCount: securityReviewItems.filter(
+        (item) => typeof item.escalatedAt === 'string' && item.escalatedAt.trim().length > 0,
+      ).length,
+    },
+    history: {
+      stalledLast7Days: countWithinWindow(
+        (item) => item.investigationStalledAt,
+        currentWindowStart,
+      ),
+      stalledPrevious7Days: countWithinWindow(
+        (item) => item.investigationStalledAt,
+        previousWindowStart,
+        currentWindowStart,
+      ),
+      takeoversLast7Days: countWithinWindow((item) => item.escalatedAt, currentWindowStart),
+      takeoversPrevious7Days: countWithinWindow(
+        (item) => item.escalatedAt,
+        previousWindowStart,
+        currentWindowStart,
+      ),
+    },
+  };
 }
 
 export class DemoCardOperationsApi implements CardOperationsApi {
@@ -2310,6 +2608,18 @@ export class DemoDashboardApi implements DashboardApi {
         requiredAction: 'Validate Fayda QR evidence',
         submittedAt: '2026-03-12T10:15:00.000Z',
         updatedAt: '2026-03-12T10:15:00.000Z',
+        onboardingEvidence: {
+          hasFaydaFrontImage: true,
+          hasFaydaBackImage: true,
+          hasSelfieImage: true,
+          extractedFullName: 'Abebe Kebede',
+          extractedPhoneNumber: '0911000001',
+          extractedCity: 'Bahir Dar',
+          extractedFaydaFinMasked: '********9012',
+          dateOfBirthCandidates: ['1988-04-12'],
+          reviewRequiredFields: [],
+          extractionMethod: 'sample_fayda_prefill',
+        },
       },
       {
         memberId: meseretMemberId,
@@ -2327,6 +2637,18 @@ export class DemoDashboardApi implements DashboardApi {
         submittedAt: '2026-03-11T08:20:00.000Z',
         updatedAt: '2026-03-13T09:10:00.000Z',
         reviewNote: 'Branch officer is validating the selfie and branch selection.',
+        onboardingEvidence: {
+          hasFaydaFrontImage: true,
+          hasFaydaBackImage: true,
+          hasSelfieImage: true,
+          extractedFullName: 'Meseret Alemu',
+          extractedPhoneNumber: '0911000002',
+          extractedCity: 'Gondar',
+          extractedFaydaFinMasked: '********4817',
+          dateOfBirthCandidates: ['1992-08-14'],
+          reviewRequiredFields: [],
+          extractionMethod: 'sample_fayda_prefill',
+        },
       },
       {
         memberId: mekdesMemberId,
@@ -2344,8 +2666,173 @@ export class DemoDashboardApi implements DashboardApi {
         submittedAt: '2026-03-10T07:40:00.000Z',
         updatedAt: '2026-03-14T11:25:00.000Z',
         reviewNote: 'Back-side Fayda upload is blurred and must be resubmitted.',
+        onboardingEvidence: {
+          hasFaydaFrontImage: true,
+          hasFaydaBackImage: false,
+          hasSelfieImage: true,
+          extractedFullName: 'Mekdes Ali',
+          extractedPhoneNumber: '0911000003',
+          extractedCity: 'Debre Markos',
+          extractedFaydaFinMasked: '********3028',
+          dateOfBirthCandidates: ['1982-05-25', '1990-02-02'],
+          reviewRequiredFields: ['dateOfBirth', 'expiryDate', 'faydaBackImage'],
+          extractionMethod: 'sample_fayda_prefill',
+        },
       },
     ];
+  }
+
+  async getOnboardingEvidenceDetail(memberId: string): Promise<OnboardingEvidenceDetail> {
+    await wait(120);
+
+    if (memberId === mekdesMemberId) {
+      return {
+        memberId,
+        customerId: 'BUN-100004',
+        memberName: 'Mekdes Ali',
+        phoneNumber: '0911000003',
+        branchName: 'Debre Markos Main Branch',
+        onboardingReviewStatus: 'needs_action',
+        identityVerificationStatus: 'needs_action',
+        reviewNote: 'Back-side Fayda upload is blurred and must be resubmitted.',
+        documents: {
+          faydaFront: {
+            storageKey: 'demo/fayda-front-mekdes',
+            originalFileName: 'fayda-front.png',
+            mimeType: 'image/png',
+            sizeBytes: 245120,
+          },
+          selfie: {
+            storageKey: 'demo/selfie-mekdes',
+            originalFileName: 'selfie.png',
+            mimeType: 'image/png',
+            sizeBytes: 198320,
+          },
+        },
+        submittedProfile: {
+          fullName: 'Mekdes Ali',
+          firstName: 'Mekdes',
+          lastName: 'Ali',
+          dateOfBirth: '1988-01-13',
+          phoneNumber: '0911000003',
+          region: 'Amhara',
+          city: 'Debre Markos',
+          branchName: 'Debre Markos Main Branch',
+          faydaFinMasked: '********3028',
+        },
+        reviewPolicy: {
+          policyVersion: 'v1',
+          blockingMismatchFields: [
+            'fullName',
+            'firstName',
+            'lastName',
+            'dateOfBirth',
+            'phoneNumber',
+            'faydaFin',
+          ],
+          blockingMismatchApprovalRoles: ['head_office_manager', 'admin'],
+          blockingMismatchApprovalReasonCodes: [
+            'official_source_verified',
+            'manual_document_review',
+            'customer_profile_corrected',
+          ],
+          requireApprovalJustification: true,
+        },
+        extractedFaydaData: {
+          fullName: 'Mekdes Ali',
+          phoneNumber: '0911000003',
+          city: 'Debre Markos',
+          faydaFinMasked: '********3028',
+          dateOfBirthCandidates: ['1982-05-25', '1990-02-02'],
+          expiryDateCandidates: ['2025-06-30', '2033-03-09'],
+          reviewRequiredFields: ['dateOfBirth', 'expiryDate', 'faydaBackImage'],
+          extractionMethod: 'sample_fayda_prefill',
+        },
+        mismatches: [
+          {
+            field: 'dateOfBirth',
+            submittedValue: '1988-01-13',
+            extractedValue: '1982-05-25 or 1990-02-02',
+          },
+        ],
+      };
+    }
+
+    return {
+      memberId,
+      customerId: memberId === abebeMemberId ? 'BUN-100001' : 'BUN-100003',
+      memberName: memberId === abebeMemberId ? 'Abebe Kebede' : 'Meseret Alemu',
+      phoneNumber: memberId === abebeMemberId ? '0911000001' : '0911000002',
+      branchName: 'Bahir Dar Main Branch',
+      onboardingReviewStatus: 'review_in_progress',
+      identityVerificationStatus: 'pending_review',
+      reviewNote: 'Branch officer is validating the selfie and branch selection.',
+      documents: {
+        faydaFront: {
+          storageKey: 'demo/fayda-front',
+          originalFileName: 'fayda-front.png',
+          mimeType: 'image/png',
+          sizeBytes: 245120,
+        },
+        faydaBack: {
+          storageKey: 'demo/fayda-back',
+          originalFileName: 'fayda-back.png',
+          mimeType: 'image/png',
+          sizeBytes: 221140,
+        },
+        selfie: {
+          storageKey: 'demo/selfie',
+          originalFileName: 'selfie.png',
+          mimeType: 'image/png',
+          sizeBytes: 198320,
+        },
+      },
+      submittedProfile: {
+        fullName: memberId === abebeMemberId ? 'Abebe Kebede' : 'Meseret Alemu',
+        firstName: memberId === abebeMemberId ? 'Abebe' : 'Meseret',
+        lastName: memberId === abebeMemberId ? 'Kebede' : 'Alemu',
+        dateOfBirth: memberId === abebeMemberId ? '1988-04-12' : '1992-08-14',
+        phoneNumber: memberId === abebeMemberId ? '0911000001' : '0911000002',
+        region: 'Amhara',
+        city: 'Bahir Dar',
+        branchName: 'Bahir Dar Main Branch',
+        faydaFinMasked: '********9012',
+      },
+      reviewPolicy: {
+        policyVersion: 'v1',
+        blockingMismatchFields: [
+          'fullName',
+          'firstName',
+          'lastName',
+          'dateOfBirth',
+          'phoneNumber',
+          'faydaFin',
+        ],
+        blockingMismatchApprovalRoles: ['head_office_manager', 'admin'],
+        blockingMismatchApprovalReasonCodes: [
+          'official_source_verified',
+          'manual_document_review',
+          'customer_profile_corrected',
+        ],
+        requireApprovalJustification: true,
+      },
+      extractedFaydaData: {
+        fullName: memberId === abebeMemberId ? 'Abebe Kebede' : 'Meseret Alemu',
+        phoneNumber: memberId === abebeMemberId ? '0911000001' : '0911000002',
+        city: 'Bahir Dar',
+        faydaFinMasked: '********9012',
+        dateOfBirthCandidates: ['1988-04-12'],
+        expiryDateCandidates: ['2032-04-11'],
+        reviewRequiredFields: [],
+        extractionMethod: 'sample_fayda_prefill',
+      },
+      mismatches: [],
+    };
+  }
+
+  async getProtectedDocumentBlob(_storageKey: string): Promise<Blob> {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><rect width="100%" height="100%" fill="#f8fafc"/><rect x="32" y="32" width="576" height="336" rx="24" fill="#e2e8f0"/><text x="50%" y="48%" text-anchor="middle" font-family="Arial" font-size="28" fill="#334155">Demo protected document</text><text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="18" fill="#64748b">Authenticated preview placeholder</text></svg>`;
+    return new Blob([svg], { type: 'image/svg+xml' });
   }
 
   async updateOnboardingReview(
@@ -2353,6 +2840,12 @@ export class DemoDashboardApi implements DashboardApi {
     payload: {
       status: 'submitted' | 'review_in_progress' | 'needs_action' | 'approved';
       note?: string;
+      approvalReasonCode?: string;
+      supersessionReasonCode?: string;
+      stepUpToken?: string;
+      approvalJustification?: string;
+      acknowledgedMismatchFields?: string[];
+      acknowledgedSupersessionFields?: string[];
     },
   ): Promise<OnboardingReviewItem> {
     await wait(120);
@@ -2381,6 +2874,18 @@ export class DemoDashboardApi implements DashboardApi {
       submittedAt: '2026-03-12T10:15:00.000Z',
       updatedAt: '2026-03-17T14:00:00.000Z',
       reviewNote: payload.note,
+      onboardingEvidence: {
+        hasFaydaFrontImage: true,
+        hasFaydaBackImage: true,
+        hasSelfieImage: true,
+        extractedFullName: memberId === abebeMemberId ? 'Abebe Kebede' : 'Meseret Alemu',
+        extractedPhoneNumber: memberId === abebeMemberId ? '0911000001' : '0911000002',
+        extractedCity: 'Bahir Dar',
+        extractedFaydaFinMasked: '********9012',
+        dateOfBirthCandidates: ['1988-04-12'],
+        reviewRequiredFields: [],
+        extractionMethod: 'sample_fayda_prefill',
+      },
     };
   }
 
@@ -3540,24 +4045,129 @@ export class DemoAuditApi implements AuditApi {
     const items: AuditLogItem[] = [
       {
         auditId: 'audit_1',
+        auditDigest: 'digest-audit-1',
         actor: 'admin_01',
+        actorRole: 'admin',
         action: 'vote_submitted',
-        entity: 'vote_2026',
+        entity: 'vote:vote_2026',
+        entityType: 'vote',
+        entityId: 'vote_2026',
         timestamp: '2026-03-09 10:12',
       },
       {
         auditId: 'audit_2',
+        auditDigest: 'digest-audit-2',
         actor: 'staff_21',
+        actorRole: 'head_office_manager',
         action: 'loan_approve',
-        entity: 'loan_1004',
+        entity: 'loan:loan_1004',
+        entityType: 'loan',
+        entityId: 'loan_1004',
         timestamp: '2026-03-09 09:44',
       },
       {
         auditId: 'audit_3',
+        auditDigest: 'digest-audit-3',
         actor: 'member_88',
+        actorRole: 'member',
         action: 'member_profile_updated',
-        entity: 'member_88',
+        entity: 'member:member_88',
+        entityType: 'member',
+        entityId: 'member_88',
         timestamp: '2026-03-09 08:18',
+      },
+      {
+        auditId: 'audit_security_contract_1',
+        auditDigest: 'digest-security-contract-1',
+        actor: 'staff_31',
+        actorRole: 'head_office_manager',
+        action: 'unsupported_security_review_metrics_contract_detected',
+        entity: 'staff:staff_31',
+        entityType: 'staff',
+        entityId: 'staff_31',
+        timestamp: '2026-03-18T12:40:00.000Z',
+        after: {
+          detectedContractVersion: 'security_review_metrics.v99',
+          supportedContractVersion: 'security_review_metrics.v2',
+          source: 'head_office_dashboard',
+        },
+      },
+      {
+        auditId: 'audit_kyc_0',
+        auditDigest: 'digest-audit-kyc-0',
+        decisionVersion: 1,
+        isCurrentDecision: false,
+        supersededByAuditId: 'audit_kyc_1',
+        actor: 'staff_22',
+        actorRole: 'head_office_manager',
+        action: 'onboarding_review_updated',
+        entity: 'member:meseret-alemu',
+        entityType: 'member',
+        entityId: 'meseret-alemu',
+        timestamp: '2026-03-15T09:10:00.000Z',
+        before: {
+          onboardingReviewStatus: 'submitted',
+          identityVerificationStatus: 'qr_uploaded',
+        },
+        after: {
+          status: 'needs_action',
+          note: 'Initial review requested correction on submitted profile values.',
+        },
+      },
+      {
+        auditId: 'audit_kyc_1',
+        auditDigest: 'digest-audit-kyc-1',
+        decisionVersion: 2,
+        isCurrentDecision: true,
+        supersedesAuditId: 'audit_kyc_0',
+        actor: 'staff_31',
+        actorRole: 'head_office_manager',
+        action: 'onboarding_review_updated',
+        entity: 'member:meseret-alemu',
+        entityType: 'member',
+        entityId: 'meseret-alemu',
+        timestamp: '2026-03-18T11:25:00.000Z',
+        before: {
+          onboardingReviewStatus: 'review_in_progress',
+          identityVerificationStatus: 'pending_review',
+        },
+        after: {
+          status: 'approved',
+          note: 'Approved after source verification and document review.',
+          approvalReasonCode: 'official_source_verified',
+          supersession: {
+            reasonCode: 'approval_recorded',
+            previousAuditId: 'audit_kyc_0',
+            previousDecisionVersion: 1,
+            changedFields: [
+              {
+                field: 'status',
+                previousValue: 'needs_action',
+                nextValue: 'approved',
+              },
+              {
+                field: 'note',
+                previousValue: 'Initial review requested correction on submitted profile values.',
+                nextValue: 'Approved after source verification and document review.',
+              },
+            ],
+          },
+          approvalJustification:
+            'Verified the Fayda mismatch against the official branch-captured evidence and approved.',
+          acknowledgedMismatchFields: ['dateOfBirth', 'phoneNumber'],
+          blockingMismatchFields: ['dateOfBirth', 'phoneNumber'],
+          reviewPolicySnapshot: {
+            policyVersion: 'v1',
+            blockingMismatchFields: ['dateOfBirth', 'phoneNumber'],
+            blockingMismatchApprovalRoles: ['head_office_manager', 'admin'],
+            blockingMismatchApprovalReasonCodes: [
+              'official_source_verified',
+              'manual_document_review',
+              'customer_profile_corrected',
+            ],
+            requireApprovalJustification: true,
+          },
+        },
       },
     ];
 
@@ -3579,16 +4189,24 @@ export class DemoAuditApi implements AuditApi {
       return [
         {
           auditId: 'audit_autopay_1',
+          auditDigest: 'digest-audit-autopay-1',
           actor: 'staff_21',
+          actorRole: 'branch_manager',
           action: 'autopay_paused_by_manager',
           entity: `${entityType}:${entityId}`,
+          entityType,
+          entityId,
           timestamp: '2026-03-18T14:10:00.000Z',
         },
         {
           auditId: 'audit_autopay_2',
+          auditDigest: 'digest-audit-autopay-2',
           actor: 'staff_21',
+          actorRole: 'branch_manager',
           action: 'autopay_reenabled_by_manager',
           entity: `${entityType}:${entityId}`,
+          entityType,
+          entityId,
           timestamp: '2026-03-18T15:40:00.000Z',
         },
       ];
@@ -3597,9 +4215,13 @@ export class DemoAuditApi implements AuditApi {
     return [
       {
         auditId: 'audit_generic_1',
+        auditDigest: 'digest-audit-generic-1',
         actor: 'admin_01',
+        actorRole: 'admin',
         action: 'entity_reviewed',
         entity: `${entityType}:${entityId}`,
+        entityType,
+        entityId,
         timestamp: '2026-03-18T10:00:00.000Z',
       },
     ];
@@ -3607,6 +4229,99 @@ export class DemoAuditApi implements AuditApi {
 
   async getByActor(role: AdminRole): Promise<AuditLogItem[]> {
     return this.getByEntity(role);
+  }
+
+  async verifyAuditLog(auditId: string): Promise<AuditLogVerificationResult> {
+    return {
+      auditId,
+      auditDigest: `digest-${auditId}`,
+      recomputedDigest: `digest-${auditId}`,
+      isValid: true,
+    };
+  }
+
+  async getOnboardingReviewDecisions(query?: {
+    actorId?: string;
+    memberId?: string;
+    status?: string;
+    approvalReasonCode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    currentOnly?: boolean;
+  }): Promise<AuditLogItem[]> {
+    const items = (await this.getByEntity(AdminRole.ADMIN)).filter(
+      (item) => item.action === 'onboarding_review_updated',
+    );
+
+    return items.filter((item) => {
+      if (query?.actorId && item.actor !== query.actorId) {
+        return false;
+      }
+      if (query?.memberId && item.entityId !== query.memberId) {
+        return false;
+      }
+      if (
+        query?.status &&
+        (typeof item.after?.status !== 'string' || item.after.status !== query.status)
+      ) {
+        return false;
+      }
+      if (
+        query?.approvalReasonCode &&
+        (typeof item.after?.approvalReasonCode !== 'string' ||
+          item.after.approvalReasonCode !== query.approvalReasonCode)
+      ) {
+        return false;
+      }
+      if (query?.dateFrom && new Date(item.timestamp).getTime() < new Date(query.dateFrom).getTime()) {
+        return false;
+      }
+      if (query?.dateTo && new Date(item.timestamp).getTime() > new Date(query.dateTo).getTime()) {
+        return false;
+      }
+      if (query?.currentOnly && item.isCurrentDecision !== true) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  async exportOnboardingReviewDecisions(query?: {
+    actorId?: string;
+    memberId?: string;
+    status?: string;
+    approvalReasonCode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    currentOnly?: boolean;
+  }): Promise<Blob> {
+    const items = await this.getOnboardingReviewDecisions(query);
+    const csv = [
+      ['auditId', 'timestamp', 'actor', 'actorRole', 'entity', 'status', 'approvalReasonCode', 'supersessionReasonCode', 'decisionVersion', 'isCurrentDecision'],
+      ...items.map((item) => [
+        item.auditId,
+        item.timestamp,
+        item.actor,
+        item.actorRole ?? '',
+        item.entity,
+        typeof item.after?.status === 'string' ? item.after.status : '',
+        typeof item.after?.approvalReasonCode === 'string'
+          ? item.after.approvalReasonCode
+          : '',
+        item.after != null &&
+        typeof item.after === 'object' &&
+        !Array.isArray(item.after) &&
+        typeof (item.after as { supersession?: { reasonCode?: unknown } }).supersession?.reasonCode === 'string'
+          ? ((item.after as { supersession?: { reasonCode?: string } }).supersession?.reasonCode ?? '')
+          : '',
+        item.decisionVersion ?? '',
+        item.isCurrentDecision == null ? '' : String(item.isCurrentDecision),
+      ]),
+    ]
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    return new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   }
 }
 

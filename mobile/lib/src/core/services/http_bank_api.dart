@@ -127,6 +127,7 @@ class HttpAuthApi implements AuthApi {
     String? faydaQrData,
     String? faydaFrontImage,
     String? faydaBackImage,
+    FaydaExtractionResult? extractedFaydaData,
     bool consentAccepted = true,
   }) async {
     final response = await _client.post(
@@ -155,6 +156,37 @@ class HttpAuthApi implements AuthApi {
           'faydaFrontImage': faydaFrontImage,
         if (faydaBackImage != null && faydaBackImage.isNotEmpty)
           'faydaBackImage': faydaBackImage,
+        if (extractedFaydaData != null)
+          'extractedFaydaData': {
+            'fullName': extractedFaydaData.fullName,
+            'firstName': extractedFaydaData.firstName,
+            'lastName': extractedFaydaData.lastName,
+            if (extractedFaydaData.dateOfBirth != null)
+              'dateOfBirth': extractedFaydaData.dateOfBirth,
+            if (extractedFaydaData.sex != null) 'sex': extractedFaydaData.sex,
+            if (extractedFaydaData.phoneNumber != null)
+              'phoneNumber': extractedFaydaData.phoneNumber,
+            if (extractedFaydaData.nationality != null)
+              'nationality': extractedFaydaData.nationality,
+            if (extractedFaydaData.region != null)
+              'region': extractedFaydaData.region,
+            if (extractedFaydaData.city != null) 'city': extractedFaydaData.city,
+            if (extractedFaydaData.subCity != null)
+              'subCity': extractedFaydaData.subCity,
+            if (extractedFaydaData.woreda != null)
+              'woreda': extractedFaydaData.woreda,
+            if (extractedFaydaData.faydaFin != null)
+              'faydaFin': extractedFaydaData.faydaFin,
+            if (extractedFaydaData.serialNumber != null)
+              'serialNumber': extractedFaydaData.serialNumber,
+            if (extractedFaydaData.cardNumber != null)
+              'cardNumber': extractedFaydaData.cardNumber,
+            'dateOfBirthCandidates':
+              extractedFaydaData.dateOfBirthCandidates,
+            'expiryDateCandidates': extractedFaydaData.expiryDateCandidates,
+            'reviewRequiredFields': extractedFaydaData.reviewRequiredFields,
+            'extractionMethod': extractedFaydaData.extractionMethod,
+          },
         'consentAccepted': consentAccepted,
       }),
     );

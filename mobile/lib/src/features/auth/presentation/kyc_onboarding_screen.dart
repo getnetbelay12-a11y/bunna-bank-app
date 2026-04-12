@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/app_scope.dart';
+import '../../../core/services/app_services.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/models/index.dart';
 import '../../../shared/widgets/app_badge.dart';
@@ -113,6 +114,7 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
+  final _dateOfBirthController = TextEditingController();
   final _faydaFinController = TextEditingController();
   final _pinController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -123,14 +125,17 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
   String _verificationStatus = 'pending_verification';
   String? _message;
   bool _submitting = false;
+  bool _extractingFaydaDetails = false;
   _SelectedUpload? _frontIdUpload;
   _SelectedUpload? _backIdUpload;
   _SelectedUpload? _selfieUpload;
+  FaydaExtractionResult? _extractedFaydaData;
 
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
+    _dateOfBirthController.dispose();
     _faydaFinController.dispose();
     _pinController.dispose();
     super.dispose();
@@ -195,6 +200,80 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                               child: _OnboardingProgressCard(
                                 currentStatus: _verificationStatus,
                                 steps: progressSteps,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            _UploadCard(
+                              title: 'Fayda Front ID Upload',
+                              actionLabel: _frontIdUpload == null
+                                  ? 'Upload Front ID'
+                                  : 'Replace Front ID',
+                              upload: _frontIdUpload,
+                              onTap: () => _selectDocumentUpload(
+                                title: 'Fayda Front ID Upload',
+                                onSelected: (value) {
+                                  setState(() {
+                                    _frontIdUpload = value;
+                                    _extractedFaydaData = null;
+                                  });
+                                },
+                              ),
+                              validator: () => _frontIdUpload == null
+                                  ? 'Front ID upload is required.'
+                                  : null,
+                            ),
+                            const SizedBox(height: 12),
+                            _UploadCard(
+                              title: 'Fayda Back ID Upload',
+                              actionLabel: _backIdUpload == null
+                                  ? 'Upload Back ID'
+                                  : 'Replace Back ID',
+                              upload: _backIdUpload,
+                              onTap: () => _selectDocumentUpload(
+                                title: 'Fayda Back ID Upload',
+                                onSelected: (value) {
+                                  setState(() {
+                                    _backIdUpload = value;
+                                    _extractedFaydaData = null;
+                                  });
+                                },
+                              ),
+                              validator: () => _backIdUpload == null
+                                  ? 'Back ID upload is required.'
+                                  : null,
+                            ),
+                            const SizedBox(height: 12),
+                            AppCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Extract details from Fayda',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Start with the uploaded front and back images. Bunna can prefill fields from the card, but conflicting values still require manual review.',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppButton(
+                                    label: _extractingFaydaDetails
+                                        ? 'Extracting...'
+                                        : 'Extract Fayda Details',
+                                    onPressed: _extractingFaydaDetails
+                                        ? null
+                                        : () => _extractFaydaDetails(services),
+                                  ),
+                                  if (_extractedFaydaData != null) ...[
+                                    const SizedBox(height: 12),
+                                    _FaydaExtractionSummaryCard(
+                                      result: _extractedFaydaData!,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             const SizedBox(height: 20),
@@ -268,6 +347,24 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                                 value.trim().isEmpty)
                                             ? 'Last name is required.'
                                             : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppInput(
+                                    controller: _dateOfBirthController,
+                                    label: 'Date of Birth',
+                                    helperText:
+                                        'Use YYYY-MM-DD. If Fayda extraction shows conflicting dates, correct it here before submission.',
+                                    validator: (value) {
+                                      final text = value?.trim() ?? '';
+                                      if (text.isEmpty) {
+                                        return 'Date of birth is required.';
+                                      }
+                                      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$')
+                                          .hasMatch(text)) {
+                                        return 'Date of birth must use YYYY-MM-DD.';
+                                      }
+                                      return null;
+                                    },
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
@@ -367,44 +464,6 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _UploadCard(
-                              title: 'Fayda Front ID Upload',
-                              actionLabel: _frontIdUpload == null
-                                  ? 'Upload Front ID'
-                                  : 'Replace Front ID',
-                              upload: _frontIdUpload,
-                              onTap: () => _selectDocumentUpload(
-                                title: 'Fayda Front ID Upload',
-                                onSelected: (value) {
-                                  setState(() {
-                                    _frontIdUpload = value;
-                                  });
-                                },
-                              ),
-                              validator: () => _frontIdUpload == null
-                                  ? 'Front ID upload is required.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            _UploadCard(
-                              title: 'Fayda Back ID Upload',
-                              actionLabel: _backIdUpload == null
-                                  ? 'Upload Back ID'
-                                  : 'Replace Back ID',
-                              upload: _backIdUpload,
-                              onTap: () => _selectDocumentUpload(
-                                title: 'Fayda Back ID Upload',
-                                onSelected: (value) {
-                                  setState(() {
-                                    _backIdUpload = value;
-                                  });
-                                },
-                              ),
-                              validator: () => _backIdUpload == null
-                                  ? 'Back ID upload is required.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
                             _UploadCard(
                               title: 'Selfie Verification',
                               actionLabel: _selfieUpload == null
@@ -574,7 +633,9 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                                 _lastNameController.text.trim(),
                                             phoneNumber: widget.phoneNumber,
                                             email: widget.email,
-                                            dateOfBirth: '1995-01-15',
+                                            dateOfBirth: _dateOfBirthController
+                                                .text
+                                                .trim(),
                                             region: _selectedRegion ?? region,
                                             city: _selectedCity ?? city,
                                             preferredBranchId:
@@ -593,6 +654,8 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
                                                 frontUpload.storageKey,
                                             faydaBackImage:
                                                 backUpload.storageKey,
+                                            extractedFaydaData:
+                                                _extractedFaydaData,
                                             consentAccepted: true,
                                           );
 
@@ -676,6 +739,11 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
     final documentsReady = _frontIdUpload != null && _backIdUpload != null;
     final selfieReady = _selfieUpload != null;
     final pinReady = _pinController.text.trim().isNotEmpty;
+    final profileReady = _selectedRegion?.isNotEmpty == true &&
+        _selectedCity?.isNotEmpty == true &&
+        _firstNameController.text.trim().isNotEmpty &&
+        _lastNameController.text.trim().isNotEmpty &&
+        _dateOfBirthController.text.trim().isNotEmpty;
 
     return [
       const _OnboardingStep(
@@ -684,17 +752,20 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
         state: _StepState.done,
       ),
       _OnboardingStep(
-        title: 'Profile and branch',
-        description: 'Region, city, and preferred branch captured.',
-        state: (_selectedRegion?.isNotEmpty == true &&
-                _selectedCity?.isNotEmpty == true)
+        title: 'Fayda documents and extract',
+        description: _extractedFaydaData == null
+            ? 'Upload front and back ID evidence, then prefill details from the card.'
+            : 'Fayda details extracted. Review flagged fields before submission.',
+        state: documentsReady && _extractedFaydaData != null
             ? _StepState.done
             : _StepState.current,
       ),
       _OnboardingStep(
-        title: 'Fayda documents',
-        description: 'Front and back ID evidence prepared for review.',
-        state: documentsReady ? _StepState.done : _StepState.current,
+        title: 'Profile and branch',
+        description: 'Confirm personal details, region, city, and preferred branch.',
+        state: profileReady
+            ? _StepState.done
+            : _StepState.current,
       ),
       _OnboardingStep(
         title: 'Selfie and PIN',
@@ -722,7 +793,7 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
       case 'needs_action':
         return 'Some onboarding details still need attention. Review the highlighted fields and submit again.';
       default:
-        return 'Provide your location, preferred branch, Fayda document uploads, selfie verification, and a secure PIN.';
+        return 'Start with Fayda uploads, review the extracted identity fields, then finish your branch selection, selfie verification, and PIN.';
     }
   }
 
@@ -735,7 +806,7 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
       case 'needs_action':
         return 'The last submission needs correction before it can move forward.';
       default:
-        return 'Fayda front and back images plus a selfie are required for onboarding review.';
+        return 'Fayda front and back images are required before Bunna can prefill your onboarding details.';
     }
   }
 
@@ -764,6 +835,74 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
         return AppBadgeTone.primary;
       default:
         return AppBadgeTone.neutral;
+    }
+  }
+
+  Future<void> _extractFaydaDetails(AppServices services) async {
+    if (_frontIdUpload == null || _backIdUpload == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Upload both Fayda front and back images first.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _extractingFaydaDetails = true;
+    });
+
+    try {
+      final result = await services.faydaPrefillApi.extractFromDocuments(
+        frontDocumentPath: _frontIdUpload!.path,
+        backDocumentPath: _backIdUpload!.path,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _extractingFaydaDetails = false;
+        _extractedFaydaData = result;
+        _firstNameController.text = result.firstName;
+        _lastNameController.text = result.lastName;
+        _faydaFinController.text = result.faydaFin ?? '';
+        if (!result.reviewRequiredFields.contains('dateOfBirth') &&
+            result.dateOfBirth != null) {
+          _dateOfBirthController.text = result.dateOfBirth!;
+        }
+        if (result.region != null && result.region!.isNotEmpty) {
+          _selectedRegion = result.region;
+        }
+        if (result.city != null && result.city!.isNotEmpty) {
+          _selectedCity = result.city;
+        }
+        _selectedBranch = null;
+        _verificationStatus =
+            result.hasConflicts ? 'needs_action' : 'documents_submitted';
+        _message = result.hasConflicts
+            ? 'Fayda details were extracted, but conflicting date fields require manual review before submission.'
+            : 'Fayda details were extracted and applied to the onboarding form.';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _extractingFaydaDetails = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _extractErrorMessage(
+              error,
+              fallback: 'Unable to extract Fayda details right now.',
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -986,6 +1125,108 @@ class _KycOnboardingScreenState extends State<KycOnboardingScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
         borderSide: const BorderSide(color: Color(0xFF0F4CBA)),
+      ),
+    );
+  }
+}
+
+class _FaydaExtractionSummaryCard extends StatelessWidget {
+  const _FaydaExtractionSummaryCard({required this.result});
+
+  final FaydaExtractionResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD8E3F5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Extracted Fayda data',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              AppBadge(
+                label:
+                    result.hasConflicts ? 'REVIEW REQUIRED' : 'PREFILL READY',
+                tone: result.hasConflicts
+                    ? AppBadgeTone.warning
+                    : AppBadgeTone.success,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _ExtractionRow(label: 'Full name', value: result.fullName),
+          _ExtractionRow(label: 'FIN', value: result.faydaFin ?? 'Not found'),
+          _ExtractionRow(
+            label: 'Phone',
+            value: result.phoneNumber ?? 'Not found',
+          ),
+          _ExtractionRow(
+            label: 'Address',
+            value:
+                '${result.city ?? 'Unknown'}, ${result.subCity ?? 'Unknown'}, Woreda ${result.woreda ?? '-'}',
+          ),
+          _ExtractionRow(
+            label: 'DOB candidates',
+            value: result.dateOfBirthCandidates.join(' or '),
+            highlight: result.reviewRequiredFields.contains('dateOfBirth'),
+          ),
+          _ExtractionRow(
+            label: 'Expiry candidates',
+            value: result.expiryDateCandidates.join(' or '),
+            highlight: result.reviewRequiredFields.contains('expiryDate'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExtractionRow extends StatelessWidget {
+  const _ExtractionRow({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+  });
+
+  final String label;
+  final String value;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RichText(
+        text: TextSpan(
+          style: Theme.of(context).textTheme.bodyMedium,
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color:
+                    highlight ? const Color(0xFFB45309) : const Color(0xFF334155),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

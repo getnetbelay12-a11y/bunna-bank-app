@@ -2,6 +2,7 @@ import {
   type AttachmentMetadata,
   type AuditApi,
   type AuditLogItem,
+  type AuditLogVerificationResult,
   type AuthApi,
   type BranchCommandCenterSummary,
   type BulkInvoiceReminderResult,
@@ -37,6 +38,7 @@ import {
   type NotificationCenterItem,
   type NotificationLogItem,
   type NotificationTemplateItem,
+  type OnboardingEvidenceDetail,
   type OnboardingReviewItem,
   type PerformancePeriod,
   type PerformanceSummaryItem,
@@ -50,6 +52,7 @@ import {
   type SchoolCollectionItem,
   type SchoolConsoleApi,
   type SchoolConsoleOverview,
+  type SecurityReviewMetrics,
   type InvoiceBatchGenerationResult,
   type InvoiceReminderResult,
   type SchoolInvoiceItem,
@@ -168,6 +171,19 @@ export class HttpAuthApi implements AuthApi {
       body: payload,
     });
   }
+
+  async verifyStaffStepUp(payload: { password: string; memberId: string }) {
+    return this.httpClient.request<{
+      stepUpToken: string;
+      verifiedAt: string;
+      expiresInSeconds: number;
+      method: string;
+    }>('/auth/staff/verify-step-up', {
+      method: 'POST',
+      body: payload,
+      accessToken: getAccessToken(),
+    });
+  }
 }
 
 export class HttpDashboardApi implements DashboardApi {
@@ -233,11 +249,37 @@ export class HttpDashboardApi implements DashboardApi {
     );
   }
 
+  async getOnboardingEvidenceDetail(
+    memberId: string,
+  ): Promise<OnboardingEvidenceDetail> {
+    return this.httpClient.request<OnboardingEvidenceDetail>(
+      `/manager/dashboard/onboarding-review/${memberId}/evidence`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getProtectedDocumentBlob(storageKey: string): Promise<Blob> {
+    return this.httpClient.requestBlob(
+      `/uploads/documents?storageKey=${encodeURIComponent(storageKey)}`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
   async updateOnboardingReview(
     memberId: string,
     payload: {
       status: 'submitted' | 'review_in_progress' | 'needs_action' | 'approved';
       note?: string;
+      approvalReasonCode?: string;
+      supersessionReasonCode?: string;
+      stepUpToken?: string;
+      approvalJustification?: string;
+      acknowledgedMismatchFields?: string[];
+      acknowledgedSupersessionFields?: string[];
     },
   ): Promise<OnboardingReviewItem> {
     return this.httpClient.request<OnboardingReviewItem>(
@@ -824,54 +866,199 @@ export class HttpVotingApi implements VotingApi {
 export class HttpAuditApi implements AuditApi {
   constructor(private readonly httpClient: HttpClient) {}
 
+  private mapAuditLogItem(item: {
+    id: string;
+    auditDigest?: string;
+    decisionVersion?: number;
+    isCurrentDecision?: boolean;
+    supersedesAuditId?: string;
+    supersededByAuditId?: string;
+    actorId: string;
+    actorRole?: string;
+    actionType: string;
+    entityType: string;
+    entityId: string;
+    before?: Record<string, unknown> | null;
+    after?: Record<string, unknown> | null;
+    createdAt?: string;
+  }): AuditLogItem {
+    return {
+      auditId: item.id,
+      auditDigest: item.auditDigest,
+      decisionVersion: item.decisionVersion,
+      isCurrentDecision: item.isCurrentDecision,
+      supersedesAuditId: item.supersedesAuditId,
+      supersededByAuditId: item.supersededByAuditId,
+      actor: item.actorId,
+      actorRole: item.actorRole,
+      action: item.actionType,
+      entity: `${item.entityType}:${item.entityId}`,
+      entityType: item.entityType,
+      entityId: item.entityId,
+      timestamp: item.createdAt ?? 'n/a',
+      before: item.before ?? null,
+      after: item.after ?? null,
+    };
+  }
+
   async getByEntity(_role: AdminRole): Promise<AuditLogItem[]> {
     const result = await this.httpClient.request<
       Array<{
         id: string;
+        auditDigest?: string;
+        decisionVersion?: number;
+        isCurrentDecision?: boolean;
+        supersedesAuditId?: string;
+        supersededByAuditId?: string;
         actorId: string;
+        actorRole?: string;
         actionType: string;
         entityType: string;
         entityId: string;
+        before?: Record<string, unknown> | null;
+        after?: Record<string, unknown> | null;
         createdAt?: string;
       }>
     >('/audit', {
       accessToken: getAccessToken(),
     });
 
-    return result.map((item) => ({
-      auditId: item.id,
-      actor: item.actorId,
-      action: item.actionType,
-      entity: `${item.entityType}:${item.entityId}`,
-      timestamp: item.createdAt ?? 'n/a',
-    }));
+    return result.map((item) => this.mapAuditLogItem(item));
   }
 
   async getEntityAuditTrail(entityType: string, entityId: string): Promise<AuditLogItem[]> {
     const result = await this.httpClient.request<
       Array<{
         id: string;
+        auditDigest?: string;
+        decisionVersion?: number;
+        isCurrentDecision?: boolean;
+        supersedesAuditId?: string;
+        supersededByAuditId?: string;
         actorId: string;
+        actorRole?: string;
         actionType: string;
         entityType: string;
         entityId: string;
+        before?: Record<string, unknown> | null;
+        after?: Record<string, unknown> | null;
         createdAt?: string;
       }>
     >(`/audit/entity/${entityType}/${entityId}`, {
       accessToken: getAccessToken(),
     });
 
-    return result.map((item) => ({
-      auditId: item.id,
-      actor: item.actorId,
-      action: item.actionType,
-      entity: `${item.entityType}:${item.entityId}`,
-      timestamp: item.createdAt ?? 'n/a',
-    }));
+    return result.map((item) => this.mapAuditLogItem(item));
   }
 
   async getByActor(_role: AdminRole): Promise<AuditLogItem[]> {
     return this.getByEntity(_role);
+  }
+
+  async verifyAuditLog(auditId: string): Promise<AuditLogVerificationResult> {
+    return this.httpClient.request<AuditLogVerificationResult>(
+      `/audit/${auditId}/verify`,
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getOnboardingReviewDecisions(query?: {
+    actorId?: string;
+    memberId?: string;
+    status?: string;
+    approvalReasonCode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    currentOnly?: boolean;
+  }): Promise<AuditLogItem[]> {
+    const params = new URLSearchParams();
+
+    if (query?.actorId) {
+      params.set('actorId', query.actorId);
+    }
+    if (query?.memberId) {
+      params.set('memberId', query.memberId);
+    }
+    if (query?.status) {
+      params.set('status', query.status);
+    }
+    if (query?.approvalReasonCode) {
+      params.set('approvalReasonCode', query.approvalReasonCode);
+    }
+    if (query?.dateFrom) {
+      params.set('dateFrom', query.dateFrom);
+    }
+    if (query?.dateTo) {
+      params.set('dateTo', query.dateTo);
+    }
+    if (query?.currentOnly) {
+      params.set('currentOnly', 'true');
+    }
+
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const result = await this.httpClient.request<
+      Array<{
+        id: string;
+        auditDigest?: string;
+        decisionVersion?: number;
+        isCurrentDecision?: boolean;
+        supersedesAuditId?: string;
+        supersededByAuditId?: string;
+        actorId: string;
+        actorRole?: string;
+        actionType: string;
+        entityType: string;
+        entityId: string;
+        before?: Record<string, unknown> | null;
+        after?: Record<string, unknown> | null;
+        createdAt?: string;
+      }>
+    >(`/audit/onboarding-review-decisions${suffix}`, {
+      accessToken: getAccessToken(),
+    });
+
+    return result.map((item) => this.mapAuditLogItem(item));
+  }
+
+  async exportOnboardingReviewDecisions(query?: {
+    actorId?: string;
+    memberId?: string;
+    status?: string;
+    approvalReasonCode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    currentOnly?: boolean;
+  }): Promise<Blob> {
+    const params = new URLSearchParams();
+
+    if (query?.actorId) {
+      params.set('actorId', query.actorId);
+    }
+    if (query?.memberId) {
+      params.set('memberId', query.memberId);
+    }
+    if (query?.status) {
+      params.set('status', query.status);
+    }
+    if (query?.approvalReasonCode) {
+      params.set('approvalReasonCode', query.approvalReasonCode);
+    }
+    if (query?.dateFrom) {
+      params.set('dateFrom', query.dateFrom);
+    }
+    if (query?.dateTo) {
+      params.set('dateTo', query.dateTo);
+    }
+    if (query?.currentOnly) {
+      params.set('currentOnly', 'true');
+    }
+
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return this.httpClient.requestBlob(`/audit/onboarding-review-decisions/export${suffix}`, {
+      accessToken: getAccessToken(),
+    });
   }
 }
 
@@ -1085,6 +1272,83 @@ export class HttpServiceRequestApi implements ServiceRequestApi {
     return this.httpClient.request<ServiceRequestDetail>(
       `/manager/service-requests/${requestId}`,
       {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async getSecurityReviewMetrics(): Promise<SecurityReviewMetrics> {
+    return this.httpClient.request<SecurityReviewMetrics>(
+      '/manager/service-requests/security-review/metrics',
+      {
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async reportSecurityReviewMetricsContractIssue(payload: {
+    detectedContractVersion: string;
+    supportedContractVersion: string;
+    source: string;
+  }): Promise<{ ok: true }> {
+    return this.httpClient.request<{ ok: true }>(
+      '/manager/service-requests/security-review/metrics/report-contract-issue',
+      {
+        method: 'POST',
+        accessToken: getAccessToken(),
+        body: payload,
+      },
+    );
+  }
+
+  async createSecurityReview(payload: {
+    memberId: string;
+    memberLabel: string;
+    reviewerLabel: string;
+    failureCount: number;
+    escalationThreshold: number;
+    latestFailureAt: string;
+    reasonCodes?: string[];
+    auditIds?: string[];
+  }): Promise<ServiceRequestDetail> {
+    return this.httpClient.request<ServiceRequestDetail>(
+      '/manager/service-requests/security-review',
+      {
+        method: 'POST',
+        body: payload,
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async assignToCurrentReviewer(requestId: string): Promise<ServiceRequestDetail> {
+    return this.httpClient.request<ServiceRequestDetail>(
+      `/manager/service-requests/${requestId}/assign`,
+      {
+        method: 'PATCH',
+        body: {},
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async acknowledgeBreach(requestId: string): Promise<ServiceRequestDetail> {
+    return this.httpClient.request<ServiceRequestDetail>(
+      `/manager/service-requests/${requestId}/acknowledge-breach`,
+      {
+        method: 'PATCH',
+        body: {},
+        accessToken: getAccessToken(),
+      },
+    );
+  }
+
+  async escalateStalled(requestId: string): Promise<ServiceRequestDetail> {
+    return this.httpClient.request<ServiceRequestDetail>(
+      `/manager/service-requests/${requestId}/escalate-stalled`,
+      {
+        method: 'PATCH',
+        body: {},
         accessToken: getAccessToken(),
       },
     );

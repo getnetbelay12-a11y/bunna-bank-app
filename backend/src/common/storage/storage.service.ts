@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -126,6 +127,7 @@ export class StorageService {
     input: StoreBinaryDocumentInput,
     uploadPath: string,
   ): Promise<StoredDocumentResult> {
+    const sha256Hash = this.computeSha256(input.buffer);
     const timestamp = Date.now();
     const safeName = this.sanitizeFileName(input.originalFileName);
     const storageKey = path.posix.join(
@@ -148,6 +150,7 @@ export class StorageService {
             originalFileName: input.originalFileName,
             mimeType: input.mimeType,
             sizeBytes: input.buffer.byteLength,
+            sha256Hash,
             storedAt: new Date().toISOString(),
           },
           null,
@@ -164,6 +167,7 @@ export class StorageService {
       originalFileName: input.originalFileName,
       mimeType: input.mimeType,
       sizeBytes: input.buffer.byteLength,
+      sha256Hash,
     };
   }
 
@@ -189,6 +193,7 @@ export class StorageService {
         typeof metadata.sizeBytes === 'number'
           ? metadata.sizeBytes
           : buffer.byteLength,
+      sha256Hash: metadata.sha256Hash,
     };
   }
 
@@ -211,6 +216,7 @@ export class StorageService {
         typeof metadata.sizeBytes === 'number'
           ? metadata.sizeBytes
           : fileStat.size,
+      sha256Hash: metadata.sha256Hash,
     };
   }
 
@@ -257,6 +263,7 @@ export class StorageService {
       originalFileName: input.originalFileName,
       mimeType: input.mimeType,
       sizeBytes: input.buffer.byteLength,
+      sha256Hash: this.computeSha256(input.buffer),
     };
   }
 
@@ -287,10 +294,15 @@ export class StorageService {
         originalFileName?: string;
         mimeType?: string;
         sizeBytes?: number;
+        sha256Hash?: string;
       };
     } catch {
       return {};
     }
+  }
+
+  private computeSha256(buffer: Buffer) {
+    return createHash('sha256').update(buffer).digest('hex');
   }
 
   private resolveLocalStoredDocumentPath(storageKey: string, uploadPath: string) {

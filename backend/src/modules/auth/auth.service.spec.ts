@@ -1,6 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Types } from 'mongoose';
 
 import { MemberType, UserRole } from '../../common/enums';
 import {
@@ -18,6 +19,15 @@ describe('AuthService', () => {
   let notificationsService: {
     createNotification: jest.Mock;
   };
+  let staffStepUpTokenModel: {
+    create: jest.Mock;
+    findOneAndUpdate: jest.Mock;
+  };
+  let auditService: {
+    log: jest.Mock;
+    logActorAction: jest.Mock;
+    getCurrentOnboardingReviewDecision: jest.Mock;
+  };
   let service: AuthService;
 
   beforeEach(() => {
@@ -32,6 +42,7 @@ describe('AuthService', () => {
 
     jwtService = {
       signAsync: jest.fn().mockResolvedValueOnce('access-token').mockResolvedValueOnce('refresh-token'),
+      verifyAsync: jest.fn(),
     } as unknown as jest.Mocked<JwtService>;
 
     memberRepository = {
@@ -45,6 +56,17 @@ describe('AuthService', () => {
     notificationsService = {
       createNotification: jest.fn(),
     };
+    staffStepUpTokenModel = {
+      create: jest.fn(),
+      findOneAndUpdate: jest.fn(),
+    };
+    auditService = {
+      log: jest.fn(),
+      logActorAction: jest.fn(),
+      getCurrentOnboardingReviewDecision: jest.fn().mockResolvedValue({
+        decisionVersion: 3,
+      }),
+    };
 
     service = new AuthService(
       configService,
@@ -56,6 +78,10 @@ describe('AuthService', () => {
       {} as never,
       {} as never,
       {} as never,
+      {
+        findOneAndUpdate: jest.fn(),
+      } as never,
+      staffStepUpTokenModel as never,
       {
         findByMemberId: jest.fn().mockResolvedValue({
           membershipStatus: 'active',
@@ -72,9 +98,7 @@ describe('AuthService', () => {
       {
         sendOtp: jest.fn(),
       } as never,
-      {
-        log: jest.fn(),
-      } as never,
+      auditService as never,
     );
   });
 
@@ -208,5 +232,213 @@ describe('AuthService', () => {
     });
     expect(result.accessToken).toBe('staff-access-token');
     expect(result.refreshToken).toBe('staff-refresh-token');
+  });
+
+  it('issues a short-lived staff step-up token after password recheck', async () => {
+    const staffId = new Types.ObjectId().toString();
+    const memberId = new Types.ObjectId().toString();
+    jwtService.signAsync = jest.fn().mockResolvedValue('step-up-token') as never;
+    staffRepository.findByIdentifier.mockResolvedValue({
+      id: staffId,
+      role: UserRole.ADMIN,
+      identifier: 'admin.head-office@bunnabank.com',
+      passwordHash: 'admin-secret',
+    });
+
+    const result = await service.verifyStaffStepUp(
+      {
+        sub: staffId,
+        role: UserRole.ADMIN,
+        identifier: 'admin.head-office@bunnabank.com',
+      },
+      {
+        password: 'admin-secret',
+        memberId,
+      },
+    );
+
+    expect(result.stepUpToken).toBe('step-up-token');
+    expect(staffStepUpTokenModel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purpose: 'kyc_blocking_mismatch_approval',
+        method: 'password_recheck',
+      }),
+    );
+    expect(jwtService.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jti: expect.any(String),
+        sub: staffId,
+        role: UserRole.ADMIN,
+        purpose: 'kyc_blocking_mismatch_approval',
+        targetMemberId: memberId,
+        boundDecisionVersion: 3,
+      }),
+      expect.objectContaining({
+        expiresIn: '5m',
+      }),
+    );
+  });
+
+  it('verifies high-risk approval step-up tokens against the current staff session', async () => {
+    const staffId = new Types.ObjectId().toString();
+    const memberId = new Types.ObjectId().toString();
+    jwtService.verifyAsync = jest.fn().mockResolvedValue({
+      jti: 'token-1',
+      sub: staffId,
+      role: UserRole.ADMIN,
+      purpose: 'kyc_blocking_mismatch_approval',
+      targetMemberId: memberId,
+      boundDecisionVersion: 3,
+      method: 'password_recheck',
+      verifiedAt: '2026-03-18T12:00:00.000Z',
+    }) as never;
+    staffStepUpTokenModel.findOneAndUpdate.mockResolvedValue({
+      tokenId: 'token-1',
+      boundDecisionVersion: 3,
+      consumedAt: new Date('2026-03-18T12:01:00.000Z'),
+    });
+
+    const result = await service.verifyHighRiskApprovalStepUpToken(
+      {
+        sub: staffId,
+        role: UserRole.ADMIN,
+      },
+      'step-up-token',
+      memberId,
+    );
+
+    expect(result).toEqual({
+      verifiedAt: '2026-03-18T12:00:00.000Z',
+      method: 'password_recheck',
+      boundMemberId: memberId,
+      boundDecisionVersion: 3,
+    });
+    expect(staffStepUpTokenModel.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenId: 'token-1',
+        memberId: new Types.ObjectId(memberId),
+        purpose: 'kyc_blocking_mismatch_approval',
+      }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          consumedAt: expect.any(Date),
+        }),
+      }),
+      expect.objectContaining({ new: true }),
+    );
+  });
+
+  it('rejects replayed high-risk approval step-up tokens', async () => {
+    const staffId = new Types.ObjectId().toString();
+    const memberId = new Types.ObjectId().toString();
+    jwtService.verifyAsync = jest.fn().mockResolvedValue({
+      jti: 'token-1',
+      sub: staffId,
+      role: UserRole.ADMIN,
+      purpose: 'kyc_blocking_mismatch_approval',
+      targetMemberId: memberId,
+      boundDecisionVersion: 3,
+      method: 'password_recheck',
+      verifiedAt: '2026-03-18T12:00:00.000Z',
+    }) as never;
+    staffStepUpTokenModel.findOneAndUpdate.mockResolvedValue(null);
+
+    await expect(
+      service.verifyHighRiskApprovalStepUpToken(
+        {
+          sub: staffId,
+          role: UserRole.ADMIN,
+        },
+        'step-up-token',
+        memberId,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(auditService.logActorAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'staff_step_up_verification_failed',
+        entityId: memberId,
+        after: expect.objectContaining({
+          reasonCode: 'replayed_or_expired_token',
+        }),
+      }),
+    );
+  });
+
+  it('rejects step-up tokens if the onboarding decision version changed after issuance', async () => {
+    const staffId = new Types.ObjectId().toString();
+    const memberId = new Types.ObjectId().toString();
+    jwtService.verifyAsync = jest.fn().mockResolvedValue({
+      jti: 'token-1',
+      sub: staffId,
+      role: UserRole.ADMIN,
+      purpose: 'kyc_blocking_mismatch_approval',
+      targetMemberId: memberId,
+      boundDecisionVersion: 3,
+      method: 'password_recheck',
+      verifiedAt: '2026-03-18T12:00:00.000Z',
+    }) as never;
+    staffStepUpTokenModel.findOneAndUpdate.mockResolvedValue({
+      tokenId: 'token-1',
+      boundDecisionVersion: 3,
+      consumedAt: new Date('2026-03-18T12:01:00.000Z'),
+    });
+    auditService.getCurrentOnboardingReviewDecision.mockResolvedValueOnce({
+      decisionVersion: 4,
+    });
+
+    await expect(
+      service.verifyHighRiskApprovalStepUpToken(
+        {
+          sub: staffId,
+          role: UserRole.ADMIN,
+        },
+        'step-up-token',
+        memberId,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(auditService.logActorAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'staff_step_up_verification_failed',
+        entityId: memberId,
+        after: expect.objectContaining({
+          reasonCode: 'decision_version_mismatch',
+        }),
+      }),
+    );
+  });
+
+  it('audits invalid step-up passwords with a specific reason code', async () => {
+    const staffId = new Types.ObjectId().toString();
+    const memberId = new Types.ObjectId().toString();
+    staffRepository.findByIdentifier.mockResolvedValue({
+      id: staffId,
+      role: UserRole.ADMIN,
+      identifier: 'admin.head-office@bunnabank.com',
+      passwordHash: 'admin-secret',
+    });
+
+    await expect(
+      service.verifyStaffStepUp(
+        {
+          sub: staffId,
+          role: UserRole.ADMIN,
+          identifier: 'admin.head-office@bunnabank.com',
+        },
+        {
+          password: 'wrong-password',
+          memberId,
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(auditService.logActorAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'staff_step_up_verification_failed',
+        entityId: memberId,
+        after: expect.objectContaining({
+          reasonCode: 'invalid_password',
+        }),
+      }),
+    );
   });
 });

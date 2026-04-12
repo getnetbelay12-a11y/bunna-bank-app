@@ -21,16 +21,39 @@ Default storage:
 - `STORAGE_PROVIDER=local`
 - `FILE_UPLOAD_PATH=uploads/`
 
+Default onboarding review policy:
+- `ONBOARDING_REVIEW_POLICY_VERSION=v1`
+- `ONBOARDING_BLOCKING_MISMATCH_FIELDS=fullName,firstName,lastName,dateOfBirth,phoneNumber,faydaFin`
+- `ONBOARDING_BLOCKING_MISMATCH_APPROVAL_ROLES=head_office_manager,admin`
+- `ONBOARDING_BLOCKING_MISMATCH_APPROVAL_REASON_CODES=official_source_verified,manual_document_review,customer_profile_corrected`
+- `ONBOARDING_REQUIRE_APPROVAL_JUSTIFICATION=true`
+
+Default security-review reporting materialization:
+- `REPORTING_SNAPSHOT_LOOKBACK_DAYS=14`
+- `REPORTING_SNAPSHOT_LOCK_MINUTES=10`
+- Daily snapshot job runs at `00:15 UTC` with a Mongo-backed shared lock so only one backend instance materializes snapshots at a time
+
 ## Web
+
+Supported Node runtime:
+- `22` LTS is the standard local/runtime target for the web workspace
+- `web/package.json` declares `^22.12.0 || ^24.0.0`
+- `web/.nvmrc` pins the expected major version
+- avoid Node `23`; the current `vite`/`vitest` stack does not declare support for it
 
 ```bash
 cd web
+nvm use
 npm install
 VITE_API_BASE_URL=http://127.0.0.1:4000 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 Default web URL:
 - `http://127.0.0.1:5173`
+
+Audit drill-down and scoped audit routing:
+- use `web/src/features/audit/auditNavigation.ts` as the canonical import surface
+- see `docs/audit-navigation.md` before adding new audit-linked navigation or action rendering
 
 ## Mobile
 

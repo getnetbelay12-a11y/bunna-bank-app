@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { HealthController } from './health.controller';
 import { appConfig } from './config/app.config';
@@ -9,6 +10,7 @@ import { databaseConfig, logMongoConnection } from './config/database.config';
 import { validateEnvironment } from './config/environment.validation';
 import { loggingConfig } from './config/logging.config';
 import { notificationsConfig } from './config/notifications.config';
+import { onboardingConfig } from './config/onboarding.config';
 import { storageConfig } from './config/storage.config';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -62,6 +64,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
         authConfig,
         databaseConfig,
         notificationsConfig,
+        onboardingConfig,
         storageConfig,
         loggingConfig,
       ],
@@ -83,6 +86,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
         };
       },
     }),
+    ScheduleModule.forRoot(),
     AuthModule,
     AuditModule,
     MemberProfilesModule,

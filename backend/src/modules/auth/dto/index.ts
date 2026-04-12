@@ -10,3 +10,5 @@ export * from './start-login.dto';
 export * from './verify-pin-login.dto';
 export * from './verify-otp.dto';
 export * from './lookup-onboarding-status.dto';
+export * from './fayda-extraction.dto';
+export * from './verify-staff-step-up.dto';

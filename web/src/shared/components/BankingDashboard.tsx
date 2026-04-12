@@ -130,12 +130,14 @@ export function DashboardMetricRow({
   label,
   value,
   note,
+  onClick,
 }: {
   label: string;
   value: string;
   note?: string;
+  onClick?: () => void;
 }) {
-  return (
+  const content = (
     <div className="dashboard-metric-row">
       <div>
         <span className="dashboard-metric-label">{label}</span>
@@ -143,6 +145,27 @@ export function DashboardMetricRow({
       </div>
       <strong className="dashboard-metric-value">{value}</strong>
     </div>
+  );
+
+  if (!onClick) {
+    return content;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: '100%',
+        padding: 0,
+        border: 0,
+        background: 'transparent',
+        textAlign: 'left',
+        cursor: 'pointer',
+      }}
+    >
+      {content}
+    </button>
   );
 }
 

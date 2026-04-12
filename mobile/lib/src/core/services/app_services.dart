@@ -19,6 +19,7 @@ class AppServices {
     required this.loanApi,
     required this.notificationApi,
     required this.documentUploadApi,
+    this.faydaPrefillApi = const DemoFaydaPrefillApi(),
     required this.chatApi,
     required this.autopayApi,
     required this.securityApi,
@@ -40,6 +41,7 @@ class AppServices {
   final LoanApi loanApi;
   final NotificationApi notificationApi;
   final DocumentUploadApi documentUploadApi;
+  final FaydaPrefillApi faydaPrefillApi;
   final ChatApi chatApi;
   final AutopayApi autopayApi;
   final SecurityApi securityApi;
@@ -62,6 +64,7 @@ class AppServices {
       loanApi: DemoLoanApi(),
       notificationApi: DemoNotificationApi(),
       documentUploadApi: DemoDocumentUploadApi(),
+      faydaPrefillApi: const DemoFaydaPrefillApi(),
       chatApi: DemoChatApi(),
       autopayApi: DemoAutopayApi(),
       securityApi: DemoSecurityApi(),
@@ -165,6 +168,7 @@ class AppServices {
         ),
         fallback: demo.documentUploadApi,
       ),
+      faydaPrefillApi: demo.faydaPrefillApi,
       chatApi: HttpChatApi(
         baseUrl: ApiConfig.baseUrl,
         sessionStore: sessionStore,
@@ -366,6 +370,7 @@ class FallbackAuthApi implements AuthApi {
     String? faydaQrData,
     String? faydaFrontImage,
     String? faydaBackImage,
+    FaydaExtractionResult? extractedFaydaData,
     bool consentAccepted = true,
   }) async {
     try {
@@ -386,6 +391,7 @@ class FallbackAuthApi implements AuthApi {
         faydaQrData: faydaQrData,
         faydaFrontImage: faydaFrontImage,
         faydaBackImage: faydaBackImage,
+        extractedFaydaData: extractedFaydaData,
         consentAccepted: consentAccepted,
       );
     } catch (_) {
@@ -406,6 +412,7 @@ class FallbackAuthApi implements AuthApi {
         faydaQrData: faydaQrData,
         faydaFrontImage: faydaFrontImage,
         faydaBackImage: faydaBackImage,
+        extractedFaydaData: extractedFaydaData,
         consentAccepted: consentAccepted,
       );
     }

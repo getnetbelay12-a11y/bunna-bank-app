@@ -28,6 +28,21 @@ export class AuditLog {
   @Prop({ type: MongooseSchema.Types.Mixed })
   after?: Record<string, unknown> | null;
 
+  @Prop({ required: true, trim: true, index: true })
+  auditDigest!: string;
+
+  @Prop({ type: Number })
+  decisionVersion?: number;
+
+  @Prop({ type: Boolean, index: true })
+  isCurrentDecision?: boolean;
+
+  @Prop({ type: Types.ObjectId, index: true })
+  supersedesAuditId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, index: true })
+  supersededByAuditId?: Types.ObjectId;
+
   createdAt?: Date;
 
   updatedAt?: Date;
@@ -37,3 +52,10 @@ export const AuditLogSchema = SchemaFactory.createForClass(AuditLog);
 
 AuditLogSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 AuditLogSchema.index({ actorId: 1, createdAt: -1 });
+AuditLogSchema.index({
+  actionType: 1,
+  entityType: 1,
+  entityId: 1,
+  isCurrentDecision: 1,
+  createdAt: -1,
+});

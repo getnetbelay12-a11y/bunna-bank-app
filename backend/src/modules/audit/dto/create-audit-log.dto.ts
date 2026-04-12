@@ -25,4 +25,18 @@ export class CreateAuditLogDto {
   @IsOptional()
   @IsObject()
   after?: Record<string, unknown> | null;
+
+  @IsOptional()
+  decisionVersion?: number;
+
+  @IsOptional()
+  isCurrentDecision?: boolean;
+
+  @IsOptional()
+  @IsMongoId()
+  supersedesAuditId?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  supersededByAuditId?: string;
 }

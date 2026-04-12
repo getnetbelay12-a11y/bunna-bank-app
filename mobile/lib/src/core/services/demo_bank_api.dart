@@ -77,6 +77,7 @@ class DemoAuthApi implements AuthApi {
     String? faydaQrData,
     String? faydaFrontImage,
     String? faydaBackImage,
+    FaydaExtractionResult? extractedFaydaData,
     bool consentAccepted = true,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -254,6 +255,37 @@ class DemoDocumentUploadApi implements DocumentUploadApi {
       provider: 'demo',
       entityId: resolvedEntityId,
       mimeType: _guessMimeType(originalFileName),
+    );
+  }
+}
+
+class DemoFaydaPrefillApi implements FaydaPrefillApi {
+  const DemoFaydaPrefillApi();
+
+  @override
+  Future<FaydaExtractionResult> extractFromDocuments({
+    required String frontDocumentPath,
+    required String backDocumentPath,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+
+    return const FaydaExtractionResult(
+      firstName: 'Getnet',
+      lastName: 'Amdu Belay',
+      fullName: 'Getnet Amdu Belay',
+      sex: 'Male',
+      phoneNumber: '0942137249',
+      nationality: 'United States',
+      region: 'Addis Ababa',
+      city: 'Addis Ababa',
+      subCity: 'Bole',
+      woreda: '07',
+      faydaFin: '425921324028',
+      serialNumber: '7898713',
+      cardNumber: '2319732954852817',
+      dateOfBirthCandidates: ['1982-05-25', '1990-02-02'],
+      expiryDateCandidates: ['2025-06-30', '2033-03-09'],
+      reviewRequiredFields: ['dateOfBirth', 'expiryDate'],
     );
   }
 }

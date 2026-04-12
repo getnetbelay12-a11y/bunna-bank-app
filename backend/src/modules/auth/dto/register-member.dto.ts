@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  ValidateNested,
   IsEmail,
   IsBoolean,
   IsOptional,
@@ -6,6 +8,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { FaydaExtractionDto } from './fayda-extraction.dto';
 
 export class RegisterMemberDto {
   @IsString()
@@ -86,4 +89,9 @@ export class RegisterMemberDto {
   @IsOptional()
   @IsBoolean()
   consentAccepted?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FaydaExtractionDto)
+  extractedFaydaData?: FaydaExtractionDto;
 }

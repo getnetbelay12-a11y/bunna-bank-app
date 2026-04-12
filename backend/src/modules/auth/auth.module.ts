@@ -26,6 +26,14 @@ import { MongooseMemberAuthRepository } from './repositories/member-auth.reposit
 import { MongooseStaffAuthRepository } from './repositories/staff-auth.repository';
 import { AuthSession, AuthSessionSchema } from './schemas/auth-session.schema';
 import { Device, DeviceSchema } from './schemas/device.schema';
+import {
+  OnboardingEvidence,
+  OnboardingEvidenceSchema,
+} from './schemas/onboarding-evidence.schema';
+import {
+  StaffStepUpToken,
+  StaffStepUpTokenSchema,
+} from './schemas/staff-step-up-token.schema';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -41,6 +49,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       { name: District.name, schema: DistrictSchema },
       { name: AuthSession.name, schema: AuthSessionSchema },
       { name: Device.name, schema: DeviceSchema },
+      { name: OnboardingEvidence.name, schema: OnboardingEvidenceSchema },
+      { name: StaffStepUpToken.name, schema: StaffStepUpTokenSchema },
       { name: MemberSecuritySetting.name, schema: MemberSecuritySettingSchema },
     ]),
     JwtModule.registerAsync({

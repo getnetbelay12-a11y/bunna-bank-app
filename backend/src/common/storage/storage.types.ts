@@ -21,6 +21,7 @@ export interface StoredDocumentResult {
   originalFileName?: string;
   mimeType?: string;
   sizeBytes?: number;
+  sha256Hash?: string;
 }
 
 export interface RetrievedStoredDocumentResult {
@@ -30,6 +31,7 @@ export interface RetrievedStoredDocumentResult {
   mimeType?: string;
   buffer: Buffer;
   sizeBytes: number;
+  sha256Hash?: string;
 }
 
 export interface StoredDocumentMetadataResult {
@@ -38,4 +40,5 @@ export interface StoredDocumentMetadataResult {
   originalFileName: string;
   mimeType?: string;
   sizeBytes: number;
+  sha256Hash?: string;
 }

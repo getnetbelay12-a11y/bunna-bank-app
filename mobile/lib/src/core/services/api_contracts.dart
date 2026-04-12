@@ -34,6 +34,7 @@ abstract class AuthApi {
     String? faydaQrData,
     String? faydaFrontImage,
     String? faydaBackImage,
+    FaydaExtractionResult? extractedFaydaData,
     bool consentAccepted = true,
   });
   Future<MemberSession> login({
@@ -153,6 +154,13 @@ abstract class DocumentUploadApi {
     required String domain,
     String? entityId,
     String? documentType,
+  });
+}
+
+abstract class FaydaPrefillApi {
+  Future<FaydaExtractionResult> extractFromDocuments({
+    required String frontDocumentPath,
+    required String backDocumentPath,
   });
 }
 

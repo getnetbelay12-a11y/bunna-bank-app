@@ -25,6 +25,8 @@ type ServiceRequestsPageProps = {
 
 export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
   const { serviceRequestApi } = useAppClient();
+  const canEscalateStalledCase =
+    session.role === 'head_office_manager' || session.role === 'admin';
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [selected, setSelected] = useState<ServiceRequestDetail | null>(null);
@@ -116,7 +118,14 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
       ['under_review', 'awaiting_customer', 'approved'].includes(item.status),
     ).length,
     completed: items.filter((item) => item.status === 'completed').length,
+    securityReview: items.filter((item) => item.type === 'security_review').length,
   };
+  const securityReviewQueue = items.filter((item) => item.type === 'security_review');
+  const overdueSecurityReviewCount = securityReviewQueue.filter((item) => item.slaState === 'overdue').length;
+  const dueSoonSecurityReviewCount = securityReviewQueue.filter((item) => item.slaState === 'due_soon').length;
+  const stalledSecurityReviewCount = securityReviewQueue.filter(
+    (item) => item.followUpState === 'investigation_stalled',
+  ).length;
 
   async function handleStatusChange(status: ServiceRequestStatus) {
     if (!selected) {
@@ -165,6 +174,31 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
     setActionMessage(`Opened evidence ${formatAttachmentLabel(storageKey)}.`);
   }
 
+  async function handleTakeOwnership() {
+    if (!serviceRequestApi?.assignToCurrentReviewer || !selected) {
+      return;
+    }
+
+    const updated = await serviceRequestApi.assignToCurrentReviewer(selected.id);
+    setSelected(updated);
+    setItems((current) =>
+      current.map((item) =>
+        item.id === updated.id
+          ? {
+              ...item,
+              latestNote: updated.latestNote,
+              updatedAt: updated.updatedAt,
+              assignedToStaffId: updated.assignedToStaffId,
+              assignedToStaffName: updated.assignedToStaffName,
+              investigationStartedAt: updated.investigationStartedAt,
+              investigationStartedBy: updated.investigationStartedBy,
+            }
+          : item,
+      ),
+    );
+    setActionMessage(`Assigned ${updated.customerId} to ${updated.assignedToStaffName ?? 'current reviewer'}.`);
+  }
+
   async function handleDownloadEvidence(storageKey: string) {
     if (!serviceRequestApi) {
       return;
@@ -176,6 +210,57 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
       attachmentMetadata[storageKey]?.originalFileName ?? formatAttachmentLabel(storageKey),
     );
     setActionMessage(`Downloaded evidence ${formatAttachmentLabel(storageKey)}.`);
+  }
+
+  async function handleAcknowledgeBreach() {
+    if (!serviceRequestApi?.acknowledgeBreach || !selected) {
+      return;
+    }
+
+    const updated = await serviceRequestApi.acknowledgeBreach(selected.id);
+    setSelected(updated);
+    setItems((current) =>
+      current.map((item) =>
+        item.id === updated.id
+          ? {
+              ...item,
+              latestNote: updated.latestNote,
+              updatedAt: updated.updatedAt,
+              breachAcknowledgedAt: updated.breachAcknowledgedAt,
+              breachAcknowledgedBy: updated.breachAcknowledgedBy,
+            }
+          : item,
+      ),
+    );
+    setActionMessage(`Acknowledged SLA breach for ${updated.customerId}.`);
+  }
+
+  async function handleEscalateStalled() {
+    if (!serviceRequestApi?.escalateStalled || !selected) {
+      return;
+    }
+
+    const updated = await serviceRequestApi.escalateStalled(selected.id);
+    setSelected(updated);
+    setItems((current) =>
+      current.map((item) =>
+        item.id === updated.id
+          ? {
+              ...item,
+              latestNote: updated.latestNote,
+              updatedAt: updated.updatedAt,
+              assignedToStaffId: updated.assignedToStaffId,
+              assignedToStaffName: updated.assignedToStaffName,
+              escalatedAt: updated.escalatedAt,
+              escalatedBy: updated.escalatedBy,
+              investigationStartedAt: updated.investigationStartedAt,
+              investigationStartedBy: updated.investigationStartedBy,
+              followUpState: updated.followUpState,
+            }
+          : item,
+      ),
+    );
+    setActionMessage(`Escalated stalled case ${updated.customerId} to ${updated.assignedToStaffName ?? 'higher authority'}.`);
   }
 
   return (
@@ -196,6 +281,10 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
             <DashboardMetricRow label="New" value={summary.submitted.toLocaleString()} />
             <DashboardMetricRow label="In flight" value={summary.inFlight.toLocaleString()} />
             <DashboardMetricRow label="Completed" value={summary.completed.toLocaleString()} />
+            <DashboardMetricRow label="Security review queue" value={summary.securityReview.toLocaleString()} />
+            <DashboardMetricRow label="Security overdue" value={overdueSecurityReviewCount.toLocaleString()} />
+            <DashboardMetricRow label="Security due soon" value={dueSoonSecurityReviewCount.toLocaleString()} />
+            <DashboardMetricRow label="Security stalled" value={stalledSecurityReviewCount.toLocaleString()} />
           </div>
         </DashboardSectionCard>
 
@@ -235,6 +324,31 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
           </div>
         </DashboardSectionCard>
       </DashboardGrid>
+
+      {securityReviewQueue.length > 0 ? (
+        <DashboardTableCard
+          title="Security Review Queue"
+          description="Repeated step-up failure cases waiting for investigator ownership or SLA follow-up."
+          headers={['Member', 'Owner', 'SLA', 'Follow-up', 'Acknowledged', 'Due', 'Failures', 'Action']}
+          rows={securityReviewQueue.map((item) => [
+            `${item.memberName} (${item.customerId})`,
+            item.assignedToStaffName ?? 'Unassigned',
+            formatSlaState(item.slaState),
+            formatFollowUpState(item.followUpState),
+            item.breachAcknowledgedAt ? 'Yes' : item.slaBreachedAt ? 'No' : 'n/a',
+            formatSlaDue(item),
+            formatSecurityFailureCount(item),
+            <button
+              key={`review-security-${item.id}`}
+              type="button"
+              className="loan-watchlist-link"
+              onClick={() => setSelectedId(item.id)}
+            >
+              Open case
+            </button>,
+          ])}
+        />
+      ) : null}
 
       <DashboardTableCard
         title="Service Requests"
@@ -278,6 +392,44 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
               <span className="dashboard-summary-label">Attachments</span>
               <strong>{selected.attachments.length.toLocaleString()}</strong>
             </div>
+            {selected.type === 'security_review' ? (
+              <>
+                <div className="dashboard-summary-chip">
+                  <span className="dashboard-summary-label">Investigator</span>
+                  <strong>{selected.assignedToStaffName ?? 'Unassigned'}</strong>
+                </div>
+                <div className="dashboard-summary-chip">
+                  <span className="dashboard-summary-label">SLA due</span>
+                  <strong>{formatSlaDue(selected)}</strong>
+                </div>
+                <div className="dashboard-summary-chip">
+                  <span className="dashboard-summary-label">SLA state</span>
+                  <strong>{formatSlaState(selected.slaState)}</strong>
+                </div>
+                <div className="dashboard-summary-chip">
+                  <span className="dashboard-summary-label">Breach acknowledged</span>
+                  <strong>
+                    {selected.breachAcknowledgedAt
+                      ? selected.breachAcknowledgedBy ?? 'Acknowledged'
+                      : selected.slaBreachedAt
+                        ? 'Pending'
+                        : 'n/a'}
+                  </strong>
+                </div>
+                <div className="dashboard-summary-chip">
+                  <span className="dashboard-summary-label">Investigation</span>
+                  <strong>
+                    {selected.investigationStartedAt
+                      ? selected.investigationStartedBy ?? 'Started'
+                      : 'Not started'}
+                  </strong>
+                </div>
+                <div className="dashboard-summary-chip">
+                  <span className="dashboard-summary-label">Follow-up state</span>
+                  <strong>{formatFollowUpState(selected.followUpState)}</strong>
+                </div>
+              </>
+            ) : null}
           </div>
 
           <div className="loan-detail-grid">
@@ -294,6 +446,39 @@ export function ServiceRequestsPage({ session }: ServiceRequestsPageProps) {
             <div>
               <p className="eyebrow">Actions</p>
               <div className="loan-filter-row">
+                {selected.type === 'security_review' && serviceRequestApi?.assignToCurrentReviewer ? (
+                  <button
+                    type="button"
+                    className="loan-filter-chip"
+                    onClick={() => void handleTakeOwnership()}
+                  >
+                    Take ownership
+                  </button>
+                ) : null}
+                {selected.type === 'security_review' &&
+                selected.slaBreachedAt &&
+                !selected.breachAcknowledgedAt &&
+                serviceRequestApi?.acknowledgeBreach ? (
+                  <button
+                    type="button"
+                    className="loan-filter-chip"
+                    onClick={() => void handleAcknowledgeBreach()}
+                  >
+                    Acknowledge breach
+                  </button>
+                ) : null}
+                {selected.type === 'security_review' &&
+                selected.followUpState === 'investigation_stalled' &&
+                canEscalateStalledCase &&
+                serviceRequestApi?.escalateStalled ? (
+                  <button
+                    type="button"
+                    className="loan-filter-chip"
+                    onClick={() => void handleEscalateStalled()}
+                  >
+                    Take over stalled case
+                  </button>
+                ) : null}
                 {(
                   ['under_review', 'awaiting_customer', 'approved', 'completed', 'rejected'] as ServiceRequestStatus[]
                 ).map((status) => (
@@ -475,6 +660,28 @@ function buildRequestFacts(request: ServiceRequestDetail) {
     ]);
   }
 
+  if (request.type === 'security_review') {
+    return buildFactList([
+      ['Source', payload.source],
+      ['Failure Count (7d)', formatCount(payload.failureCount7d)],
+      ['Escalation Threshold', formatCount(payload.escalationThreshold)],
+      ['Latest Failure At', payload.latestFailureAt],
+      ['SLA Breached At', request.slaBreachedAt],
+      ['Breach Acknowledged At', request.breachAcknowledgedAt],
+      ['Breach Acknowledged By', request.breachAcknowledgedBy],
+      ['Investigation Started At', request.investigationStartedAt],
+      ['Investigation Started By', request.investigationStartedBy],
+      ['Investigation Stalled At', request.investigationStalledAt],
+      ['Escalated At', request.escalatedAt],
+      ['Escalated By', request.escalatedBy],
+      ['Follow-Up State', formatFollowUpState(request.followUpState)],
+      ['Reviewer Under Watch', payload.reviewerLabel],
+      ['Target Member Label', payload.memberLabel],
+      ['Reason Codes', formatList(payload.reasonCodes)],
+      ['Related Audit IDs', formatList(payload.relatedAuditIds)],
+    ]);
+  }
+
   return [];
 }
 
@@ -506,7 +713,65 @@ function formatCurrency(value: unknown) {
   })}`;
 }
 
+function formatCount(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return value.toLocaleString();
+}
+
+function formatList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const items = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+  return items.length > 0 ? items.join(', ') : undefined;
+}
+
 function formatAttachmentLabel(value: string) {
   const clean = value.split('/').pop() ?? value;
   return clean.replace(/^\d+-/, '');
+}
+
+function formatSecurityFailureCount(request: ServiceRequestItem) {
+  const value =
+    request.type === 'security_review' && request.payload
+      ? request.payload.failureCount7d
+      : undefined;
+  return typeof value === 'number' ? value.toLocaleString() : 'n/a';
+}
+
+function formatSlaDue(request: ServiceRequestItem | ServiceRequestDetail) {
+  const rawDueAt = request.dueAt;
+  if (!rawDueAt) {
+    return 'n/a';
+  }
+
+  const dueAt = new Date(rawDueAt);
+  if (Number.isNaN(dueAt.getTime())) {
+    return rawDueAt;
+  }
+
+  const now = Date.now();
+  return dueAt.getTime() < now
+    ? `Overdue since ${dueAt.toISOString()}`
+    : dueAt.toISOString();
+}
+
+function formatSlaState(value?: ServiceRequestItem['slaState']) {
+  if (!value) {
+    return 'n/a';
+  }
+
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatFollowUpState(value?: ServiceRequestItem['followUpState']) {
+  if (!value) {
+    return 'n/a';
+  }
+
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }

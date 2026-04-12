@@ -66,6 +66,14 @@ export class DashboardController {
     return this.dashboardService.getOnboardingReviewQueue(currentUser);
   }
 
+  @Get('onboarding-review/:memberId/evidence')
+  getOnboardingEvidenceDetail(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('memberId') memberId: string,
+  ) {
+    return this.dashboardService.getOnboardingEvidenceDetail(currentUser, memberId);
+  }
+
   @Get('autopay-operations')
   getAutopayOperations(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.dashboardService.getAutopayOperations(currentUser);

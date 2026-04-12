@@ -1,9 +1,13 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { Roles } from '../../common/decorators';
 import { UserRole } from '../../common/enums';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
-import { ListAuditLogsQueryDto } from './dto';
+import {
+  ListAuditLogsQueryDto,
+  ListOnboardingReviewAuditQueryDto,
+} from './dto';
 import { AuditService } from './audit.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,6 +26,33 @@ export class AuditController {
   @Get()
   list(@Query() query: ListAuditLogsQueryDto) {
     return this.auditService.list(query);
+  }
+
+  @Get('onboarding-review-decisions')
+  listOnboardingReviewDecisions(
+    @Query() query: ListOnboardingReviewAuditQueryDto,
+  ) {
+    return this.auditService.listOnboardingReviewDecisions(query);
+  }
+
+  @Get('onboarding-review-decisions/export')
+  async exportOnboardingReviewDecisions(
+    @Query() query: ListOnboardingReviewAuditQueryDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const csv = await this.auditService.exportOnboardingReviewDecisionsCsv(query);
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader(
+      'Content-Disposition',
+      'attachment; filename="onboarding-review-decisions.csv"',
+    );
+
+    return csv;
+  }
+
+  @Get(':auditId/verify')
+  verifyAuditLog(@Param('auditId') auditId: string) {
+    return this.auditService.verifyAuditLog(auditId);
   }
 
   @Get('entity/:entityType/:entityId')

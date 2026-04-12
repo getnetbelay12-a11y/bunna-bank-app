@@ -13,6 +13,14 @@ import {
   type AppSession,
 } from '../../core/session';
 import { FloatingSupportChatLauncher } from '../support/FloatingSupportChatLauncher';
+import {
+  applyAuditScopeToSearch,
+  createAuditScopeForAction,
+  createAuditScopeForEntity,
+  createAuditScopeForEntityReference,
+  readAuditScopeFromSearch,
+  type AuditScope,
+} from '../audit/auditNavigation';
 import type { NotificationCategory } from '../../core/api/contracts';
 import {
   getConsoleDefinition,
@@ -111,6 +119,10 @@ export function DashboardShell({
   onLogout,
 }: DashboardShellProps) {
   const schoolSession = isSchoolSession(session);
+  const initialAuditScope =
+    typeof window === 'undefined'
+      ? { entity: undefined, entityType: undefined, entityId: undefined, action: undefined }
+      : readAuditScopeFromSearch(window.location.search);
   type EntryContext =
     | 'dashboard'
     | 'risk'
@@ -149,12 +161,17 @@ export function DashboardShell({
   >(undefined);
   const [selectedKycMemberId, setSelectedKycMemberId] = useState<string | undefined>(undefined);
   const [selectedVoteId, setSelectedVoteId] = useState<string | undefined>(undefined);
-  const [selectedAuditEntity, setSelectedAuditEntity] = useState<string | undefined>(undefined);
+  const [selectedAuditEntity, setSelectedAuditEntity] = useState<string | undefined>(
+    () => initialAuditScope.entity,
+  );
   const [selectedAuditEntityType, setSelectedAuditEntityType] = useState<string | undefined>(
-    undefined,
+    () => initialAuditScope.entityType,
   );
   const [selectedAuditEntityId, setSelectedAuditEntityId] = useState<string | undefined>(
-    undefined,
+    () => initialAuditScope.entityId,
+  );
+  const [selectedAuditAction, setSelectedAuditAction] = useState<string | undefined>(
+    () => initialAuditScope.action,
   );
   const [selectedAutopayOperationId, setSelectedAutopayOperationId] = useState<string | undefined>(undefined);
   const [selectedPaymentMemberId, setSelectedPaymentMemberId] = useState<string | undefined>(
@@ -192,14 +209,40 @@ export function DashboardShell({
     }
 
     const sectionPath = resolveConsolePath(session, active);
-    if (window.location.pathname !== sectionPath) {
-      window.history.replaceState({}, '', sectionPath);
+    const nextUrl = buildConsoleUrl(session, active, {
+      entity: selectedAuditEntity,
+      entityType: selectedAuditEntityType,
+      entityId: selectedAuditEntityId,
+      action: selectedAuditAction,
+    });
+    const nextSearch = new URL(nextUrl, window.location.origin).search;
+    if (
+      window.location.pathname !== sectionPath ||
+      window.location.search !== nextSearch
+    ) {
+      window.history.replaceState({}, '', nextUrl);
     }
-  }, [active, session]);
+  }, [
+    active,
+    selectedAuditAction,
+    selectedAuditEntity,
+    selectedAuditEntityId,
+    selectedAuditEntityType,
+    session,
+  ]);
 
   useEffect(() => {
     void prefetchConsoleSection(active);
   }, [active]);
+
+  const openAuditWithScope = (auditScope: AuditScope, entryContext: EntryContext) => {
+    setSelectedAuditEntity(auditScope.entity);
+    setSelectedAuditEntityType(auditScope.entityType);
+    setSelectedAuditEntityId(auditScope.entityId);
+    setSelectedAuditAction(auditScope.action);
+    setAuditEntryContext(entryContext);
+    setActive('audit');
+  };
 
   return (
     <div className={schoolSession ? 'app-shell school-console-shell' : 'app-shell'}>
@@ -242,6 +285,7 @@ export function DashboardShell({
                           setSelectedAuditEntity(undefined);
                           setSelectedAuditEntityType(undefined);
                           setSelectedAuditEntityId(undefined);
+                          setSelectedAuditAction(undefined);
                         }
                         setLoanEntryContext(null);
                         setSupportEntryContext(null);
@@ -439,21 +483,16 @@ export function DashboardShell({
               setActive('voting');
             }}
             onOpenAuditEntity={(entity) => {
-              setSelectedAuditEntityType(undefined);
-              setSelectedAuditEntityId(undefined);
-              setSelectedAuditEntity(entity);
-              setAuditEntryContext('dashboard');
-              setActive('audit');
+              openAuditWithScope(createAuditScopeForEntity(entity), 'dashboard');
             }}
-            onOpenAuditWorkspace={() => {
-              setSelectedAuditEntity(undefined);
-              setSelectedAuditEntityType(undefined);
-              setSelectedAuditEntityId(undefined);
-              setAuditEntryContext('dashboard');
-              setActive('audit');
+            onOpenAuditWorkspace={(actionType) => {
+              openAuditWithScope(createAuditScopeForAction(actionType), 'dashboard');
             }}
             onOpenRisk={() => {
               setActive('risk');
+            }}
+            onOpenServiceRequests={() => {
+              setActive('serviceRequests');
             }}
           />
         ) : null}
@@ -520,11 +559,10 @@ export function DashboardShell({
           <AutopayOperationsPage
             initialOperationId={selectedAutopayOperationId}
             onOpenAuditEntity={(entityType, entityId) => {
-              setSelectedAuditEntityType(entityType);
-              setSelectedAuditEntityId(entityId);
-              setSelectedAuditEntity(`${entityType}:${entityId}`);
-              setAuditEntryContext('autopayOps');
-              setActive('audit');
+              openAuditWithScope(
+                createAuditScopeForEntityReference(entityType, entityId),
+                'autopayOps',
+              );
             }}
             onOpenNotificationCategory={(category) => {
               setSelectedNotificationCategory(category);
@@ -576,11 +614,7 @@ export function DashboardShell({
         {!schoolSession && active === 'risk' ? (
           <RiskMonitoringPage
             onOpenAuditEntity={(entity) => {
-              setSelectedAuditEntityType(undefined);
-              setSelectedAuditEntityId(undefined);
-              setSelectedAuditEntity(entity);
-              setAuditEntryContext('risk');
-              setActive('audit');
+              openAuditWithScope(createAuditScopeForEntity(entity), 'risk');
             }}
             onOpenKycMember={(memberId) => {
               setSelectedKycMemberId(memberId);
@@ -692,6 +726,7 @@ export function DashboardShell({
         {!schoolSession && active === 'audit' && canViewAudit(session.role) ? (
           <AuditLogViewerPage
             initialEntity={selectedAuditEntity}
+            initialActionFilter={selectedAuditAction}
             initialEntityId={selectedAuditEntityId}
             initialEntityType={selectedAuditEntityType}
             onOpenAutopayOperation={(operationId) => {
@@ -945,6 +980,16 @@ function resolveConsolePath(session: AppSession, active: ConsoleNavKey) {
   const basePath = getSessionConsoleBasePath(session);
   const routeSegment = routeSegments[active] ?? active;
   return `${basePath}/${routeSegment}`;
+}
+
+function buildConsoleUrl(
+  session: AppSession,
+  active: ConsoleNavKey,
+  auditScope?: AuditScope,
+) {
+  const sectionPath = resolveConsolePath(session, active);
+  const search = active === 'audit' ? applyAuditScopeToSearch('', auditScope) : '';
+  return `${sectionPath}${search}`;
 }
 
 const routeSegments: Partial<Record<ConsoleNavKey, string>> = {

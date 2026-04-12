@@ -67,6 +67,92 @@ export interface OnboardingReviewItem {
   submittedAt?: string;
   updatedAt?: string;
   reviewNote?: string;
+  onboardingEvidence?: {
+    hasFaydaFrontImage: boolean;
+    hasFaydaBackImage: boolean;
+    hasSelfieImage: boolean;
+    extractedFullName?: string;
+    extractedPhoneNumber?: string;
+    extractedCity?: string;
+    extractedFaydaFinMasked?: string;
+    dateOfBirthCandidates: string[];
+    reviewRequiredFields: string[];
+    extractionMethod?: string;
+  };
+}
+
+export interface OnboardingEvidenceDetail {
+  memberId: string;
+  customerId: string;
+  memberName: string;
+  phoneNumber?: string;
+  branchName?: string;
+  onboardingReviewStatus: string;
+  identityVerificationStatus: string;
+  reviewNote?: string;
+  documents: {
+    faydaFront?: {
+      storageKey: string;
+      originalFileName?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+    };
+    faydaBack?: {
+      storageKey: string;
+      originalFileName?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+    };
+    selfie?: {
+      storageKey: string;
+      originalFileName?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+    };
+  };
+  submittedProfile: {
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
+    phoneNumber?: string;
+    region?: string;
+    city?: string;
+    branchName?: string;
+    faydaFinMasked?: string;
+  };
+  reviewPolicy: {
+    policyVersion: string;
+    blockingMismatchFields: string[];
+    blockingMismatchApprovalRoles: string[];
+    blockingMismatchApprovalReasonCodes: string[];
+    requireApprovalJustification: boolean;
+  };
+  extractedFaydaData?: {
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
+    sex?: string;
+    phoneNumber?: string;
+    nationality?: string;
+    region?: string;
+    city?: string;
+    subCity?: string;
+    woreda?: string;
+    faydaFinMasked?: string;
+    serialNumber?: string;
+    cardNumber?: string;
+    dateOfBirthCandidates: string[];
+    expiryDateCandidates: string[];
+    reviewRequiredFields: string[];
+    extractionMethod?: string;
+  };
+  mismatches: Array<{
+    field: string;
+    submittedValue?: string;
+    extractedValue?: string;
+  }>;
 }
 
 export interface AutopayOperationItem {
@@ -330,10 +416,27 @@ export interface CreateManagerNotificationCampaignPayload {
 
 export interface AuditLogItem {
   auditId: string;
+  auditDigest?: string;
+  decisionVersion?: number;
+  isCurrentDecision?: boolean;
+  supersedesAuditId?: string;
+  supersededByAuditId?: string;
   actor: string;
+  actorRole?: string;
   action: string;
   entity: string;
+  entityType?: string;
+  entityId?: string;
   timestamp: string;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+}
+
+export interface AuditLogVerificationResult {
+  auditId: string;
+  auditDigest: string;
+  recomputedDigest: string;
+  isValid: boolean;
 }
 
 export interface SupportChatSummaryItem {
@@ -415,7 +518,8 @@ export type ServiceRequestType =
   | 'payment_dispute'
   | 'phone_update'
   | 'atm_card_request'
-  | 'account_relationship';
+  | 'account_relationship'
+  | 'security_review';
 
 export type ServiceRequestStatus =
   | 'submitted'
@@ -439,7 +543,26 @@ export interface ServiceRequestItem {
   title: string;
   description: string;
   status: ServiceRequestStatus;
+  payload?: Record<string, unknown>;
+  dueAt?: string;
+  slaState?: 'on_track' | 'due_soon' | 'overdue';
+  slaBreachedAt?: string;
+  breachAcknowledgedAt?: string;
+  breachAcknowledgedBy?: string;
+  investigationStartedAt?: string;
+  investigationStartedBy?: string;
+  investigationStalledAt?: string;
+  escalatedAt?: string;
+  escalatedBy?: string;
+  followUpState?:
+    | 'not_breached'
+    | 'pending_acknowledgment'
+    | 'awaiting_investigation'
+    | 'investigation_started'
+    | 'investigation_stalled';
   latestNote?: string;
+  assignedToStaffId?: string;
+  assignedToStaffName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -467,6 +590,29 @@ export interface ServiceRequestListResult {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface SecurityReviewMetrics {
+  metadata: {
+    contractVersion: string;
+    currentStateBasis: 'live_service_request_state';
+    historyBasis: 'retained_daily_aggregates_with_event_fallback';
+    historyEventTypes: ['investigation_stalled', 'stalled_case_escalated'];
+    retentionWindowDays: number;
+  };
+  currentState: {
+    openCount: number;
+    breachedCount: number;
+    dueSoonCount: number;
+    stalledCount: number;
+    takeoverCount: number;
+  };
+  history: {
+    stalledLast7Days: number;
+    stalledPrevious7Days: number;
+    takeoversLast7Days: number;
+    takeoversPrevious7Days: number;
+  };
 }
 
 export type CardStatus =
@@ -869,6 +1015,15 @@ export interface StaffLoginPayload {
 
 export interface AuthApi {
   login(payload: StaffLoginPayload): Promise<AppSession>;
+  verifyStaffStepUp?(payload: {
+    password: string;
+    memberId: string;
+  }): Promise<{
+    stepUpToken: string;
+    verifiedAt: string;
+    expiresInSeconds: number;
+    method: string;
+  }>;
   checkExistingAccount?: (payload: {
     phoneNumber?: string;
     faydaFin?: string;
@@ -888,6 +1043,8 @@ export interface DashboardApi {
   getStaffRanking(role: AdminRole): Promise<StaffRankingItem[]>;
   getVotingSummary(): Promise<VotingSummaryItem[]>;
   getOnboardingReviewQueue(role: AdminRole): Promise<OnboardingReviewItem[]>;
+  getOnboardingEvidenceDetail?: (memberId: string) => Promise<OnboardingEvidenceDetail>;
+  getProtectedDocumentBlob?: (storageKey: string) => Promise<Blob>;
   getAutopayOperations(role: AdminRole): Promise<AutopayOperationItem[]>;
   updateAutopayOperation(
     id: string,
@@ -901,6 +1058,12 @@ export interface DashboardApi {
     payload: {
       status: 'submitted' | 'review_in_progress' | 'needs_action' | 'approved';
       note?: string;
+      approvalReasonCode?: string;
+      supersessionReasonCode?: string;
+      stepUpToken?: string;
+      approvalJustification?: string;
+      acknowledgedMismatchFields?: string[];
+      acknowledgedSupersessionFields?: string[];
     },
   ): Promise<OnboardingReviewItem>;
   getHeadOfficeDistrictSummary(
@@ -1065,6 +1228,25 @@ export interface AuditApi {
   getByEntity(role: AdminRole): Promise<AuditLogItem[]>;
   getEntityAuditTrail(entityType: string, entityId: string): Promise<AuditLogItem[]>;
   getByActor(role: AdminRole): Promise<AuditLogItem[]>;
+  verifyAuditLog?(auditId: string): Promise<AuditLogVerificationResult>;
+  getOnboardingReviewDecisions?(query?: {
+    actorId?: string;
+    memberId?: string;
+    status?: string;
+    approvalReasonCode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    currentOnly?: boolean;
+  }): Promise<AuditLogItem[]>;
+  exportOnboardingReviewDecisions?(query?: {
+    actorId?: string;
+    memberId?: string;
+    status?: string;
+    approvalReasonCode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    currentOnly?: boolean;
+  }): Promise<Blob>;
 }
 
 export interface SupportApi {
@@ -1082,6 +1264,25 @@ export interface SupportApi {
 export interface ServiceRequestApi {
   getRequests(): Promise<ServiceRequestListResult>;
   getRequest(requestId: string): Promise<ServiceRequestDetail>;
+  getSecurityReviewMetrics?(): Promise<SecurityReviewMetrics>;
+  reportSecurityReviewMetricsContractIssue?(payload: {
+    detectedContractVersion: string;
+    supportedContractVersion: string;
+    source: string;
+  }): Promise<{ ok: true }>;
+  createSecurityReview?(payload: {
+    memberId: string;
+    memberLabel: string;
+    reviewerLabel: string;
+    failureCount: number;
+    escalationThreshold: number;
+    latestFailureAt: string;
+    reasonCodes?: string[];
+    auditIds?: string[];
+  }): Promise<ServiceRequestDetail>;
+  assignToCurrentReviewer?(requestId: string): Promise<ServiceRequestDetail>;
+  acknowledgeBreach?(requestId: string): Promise<ServiceRequestDetail>;
+  escalateStalled?(requestId: string): Promise<ServiceRequestDetail>;
   downloadAttachment(storageKey: string): Promise<Blob>;
   getAttachmentMetadata(storageKey: string): Promise<AttachmentMetadata>;
   updateStatus(

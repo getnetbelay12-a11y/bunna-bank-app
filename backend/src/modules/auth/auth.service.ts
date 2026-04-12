@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 import {
   BadRequestException,
@@ -36,6 +36,7 @@ import {
   ResetPinDto,
   StartLoginDto,
   StaffLoginDto,
+  VerifyStaffStepUpDto,
   VerifyPinLoginDto,
   VerifyOtpDto,
 } from './dto';
@@ -63,6 +64,14 @@ import { buildRegistrationCompletedNotification } from '../notifications/banking
 import { deriveStaffPermissions } from '../staff/staff-permissions';
 import { AuthSession, AuthSessionDocument } from './schemas/auth-session.schema';
 import { Device, DeviceDocument } from './schemas/device.schema';
+import {
+  OnboardingEvidence,
+  OnboardingEvidenceDocument,
+} from './schemas/onboarding-evidence.schema';
+import {
+  StaffStepUpToken,
+  StaffStepUpTokenDocument,
+} from './schemas/staff-step-up-token.schema';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -85,6 +94,10 @@ export class AuthService implements OnModuleInit {
     private readonly authSessionModel: Model<AuthSessionDocument>,
     @InjectModel(Device.name)
     private readonly deviceModel: Model<DeviceDocument>,
+    @InjectModel(OnboardingEvidence.name)
+    private readonly onboardingEvidenceModel: Model<OnboardingEvidenceDocument>,
+    @InjectModel(StaffStepUpToken.name)
+    private readonly staffStepUpTokenModel: Model<StaffStepUpTokenDocument>,
     private readonly memberProfilesService: MemberProfilesService,
     private readonly identityVerificationService: IdentityVerificationService,
     private readonly notificationsService: NotificationsService,
@@ -355,6 +368,37 @@ export class AuthService implements OnModuleInit {
 
     await this.runRegistrationSideEffect(
       demoMode,
+      'onboarding evidence persistence',
+      normalizedDto.phoneNumber,
+      async () => {
+        await this.onboardingEvidenceModel.findOneAndUpdate(
+          { memberId: member._id },
+          {
+            $set: {
+              phoneNumber: normalizedDto.phoneNumber,
+              faydaFrontImage: normalizedDto.faydaFrontImage,
+              faydaBackImage: normalizedDto.faydaBackImage,
+              selfieImage: this.extractSelfieStorageKey(normalizedDto.faydaQrData),
+              extractedFaydaData: normalizedDto.extractedFaydaData
+                ? {
+                    ...normalizedDto.extractedFaydaData,
+                    reviewRequiredFields:
+                      normalizedDto.extractedFaydaData.reviewRequiredFields ?? [],
+                    dateOfBirthCandidates:
+                      normalizedDto.extractedFaydaData.dateOfBirthCandidates ?? [],
+                    expiryDateCandidates:
+                      normalizedDto.extractedFaydaData.expiryDateCandidates ?? [],
+                  }
+                : undefined,
+            },
+          },
+          { new: true, upsert: true, setDefaultsOnInsert: true },
+        );
+      },
+    );
+
+    await this.runRegistrationSideEffect(
+      demoMode,
       'registration notification',
       normalizedDto.phoneNumber,
       async () => {
@@ -395,6 +439,11 @@ export class AuthService implements OnModuleInit {
             city: normalizedDto.city,
             preferredBranchId: branch._id.toString(),
             preferredBranchName: branch.name,
+            hasFaydaFrontImage: Boolean(normalizedDto.faydaFrontImage),
+            hasFaydaBackImage: Boolean(normalizedDto.faydaBackImage),
+            hasExtractedFaydaData: Boolean(normalizedDto.extractedFaydaData),
+            reviewRequiredFields:
+              normalizedDto.extractedFaydaData?.reviewRequiredFields ?? [],
             demoMode,
           },
         });
@@ -408,6 +457,18 @@ export class AuthService implements OnModuleInit {
         ? 'Seeded registration completed successfully. Verification checks were bypassed.'
         : 'Registration submitted successfully. Fayda verification is pending review.',
     };
+  }
+
+  private extractSelfieStorageKey(faydaQrData?: string) {
+    if (!faydaQrData) {
+      return undefined;
+    }
+
+    const selfieSegment = faydaQrData
+      .split('|')
+      .find((segment) => segment.startsWith('selfie:'));
+
+    return selfieSegment?.slice('selfie:'.length) || undefined;
   }
 
   async loginMember(dto: MemberLoginDto): Promise<LoginResult> {
@@ -544,6 +605,186 @@ export class AuthService implements OnModuleInit {
     );
 
     return this.loginPrincipal(principal, dto.password, false);
+  }
+
+  async verifyStaffStepUp(
+    currentUser: AuthenticatedUser,
+    dto: VerifyStaffStepUpDto,
+  ) {
+    if (
+      currentUser.role === UserRole.MEMBER ||
+      currentUser.role === UserRole.SHAREHOLDER_MEMBER
+    ) {
+      throw new ForbiddenException('Step-up verification is only available for staff users.');
+    }
+
+    const identifier = currentUser.identifier?.trim() || currentUser.email?.trim();
+    if (!identifier) {
+      await this.logStepUpFailure(currentUser, dto.memberId, 'missing_staff_identifier');
+      throw new UnauthorizedException('Staff identifier is not available for step-up verification.');
+    }
+
+    const principal = await this.staffAuthRepository.findByIdentifier(identifier);
+    if (!principal) {
+      await this.logStepUpFailure(currentUser, dto.memberId, 'staff_account_not_found');
+      throw new UnauthorizedException('Staff account was not found for step-up verification.');
+    }
+
+    const passwordIsValid = await this.verifyPassword(dto.password, principal.passwordHash);
+    if (!passwordIsValid) {
+      await this.logStepUpFailure(currentUser, dto.memberId, 'invalid_password');
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
+    const verifiedAt = new Date();
+    const expiresAt = new Date(verifiedAt.getTime() + 5 * 60 * 1000);
+    const tokenId = randomUUID();
+    const currentDecision = await this.auditService.getCurrentOnboardingReviewDecision(
+      dto.memberId,
+    );
+    const boundDecisionVersion = currentDecision?.decisionVersion ?? 0;
+    const auth = this.configService.getOrThrow<{
+      jwtIssuer: string;
+      jwtAudience: string;
+    }>('auth');
+    await this.staffStepUpTokenModel.create({
+      tokenId,
+      staffId: new Types.ObjectId(currentUser.sub),
+      memberId: new Types.ObjectId(dto.memberId),
+      purpose: 'kyc_blocking_mismatch_approval',
+      method: 'password_recheck',
+      boundDecisionVersion,
+      expiresAt,
+    });
+    const stepUpToken = await this.jwtService.signAsync(
+      {
+        jti: tokenId,
+        sub: currentUser.sub,
+        role: currentUser.role,
+        purpose: 'kyc_blocking_mismatch_approval',
+        targetMemberId: dto.memberId,
+        boundDecisionVersion,
+        method: 'password_recheck',
+        verifiedAt: verifiedAt.toISOString(),
+      },
+      {
+        expiresIn: '5m',
+        issuer: auth.jwtIssuer,
+        audience: auth.jwtAudience,
+      },
+    );
+
+    return {
+      stepUpToken,
+      verifiedAt: verifiedAt.toISOString(),
+      expiresInSeconds: 300,
+      method: 'password_recheck',
+    };
+  }
+
+  async verifyHighRiskApprovalStepUpToken(
+    currentUser: AuthenticatedUser,
+    stepUpToken: string | undefined,
+    memberId: string,
+  ) {
+    if (!stepUpToken?.trim()) {
+      await this.logStepUpFailure(currentUser, memberId, 'missing_step_up_token');
+      throw new UnauthorizedException(
+        'Step-up verification is required for high-risk onboarding approval.',
+      );
+    }
+
+    const auth = this.configService.getOrThrow<{
+      jwtIssuer: string;
+      jwtAudience: string;
+    }>('auth');
+    let payload: {
+      jti?: string;
+      sub?: string;
+      role?: UserRole;
+      purpose?: string;
+      targetMemberId?: string;
+      boundDecisionVersion?: number;
+      method?: string;
+      verifiedAt?: string;
+    };
+    try {
+      payload = await this.jwtService.verifyAsync<{
+        jti?: string;
+        sub?: string;
+        role?: UserRole;
+        purpose?: string;
+        targetMemberId?: string;
+        boundDecisionVersion?: number;
+        method?: string;
+        verifiedAt?: string;
+      }>(stepUpToken.trim(), {
+        issuer: auth.jwtIssuer,
+        audience: auth.jwtAudience,
+      });
+    } catch {
+      await this.logStepUpFailure(currentUser, memberId, 'token_verification_failed');
+      throw new UnauthorizedException('Invalid step-up verification token.');
+    }
+
+    if (
+      payload.sub !== currentUser.sub ||
+      payload.role !== currentUser.role
+    ) {
+      await this.logStepUpFailure(currentUser, memberId, 'actor_binding_mismatch');
+      throw new UnauthorizedException('Invalid step-up verification token.');
+    }
+
+    if (payload.purpose !== 'kyc_blocking_mismatch_approval') {
+      await this.logStepUpFailure(currentUser, memberId, 'purpose_mismatch');
+      throw new UnauthorizedException('Invalid step-up verification token.');
+    }
+
+    if (payload.targetMemberId !== memberId) {
+      await this.logStepUpFailure(currentUser, memberId, 'member_binding_mismatch');
+      throw new UnauthorizedException('Invalid step-up verification token.');
+    }
+
+    const consumedToken = await this.staffStepUpTokenModel.findOneAndUpdate(
+      {
+        tokenId: payload.jti,
+        staffId: new Types.ObjectId(currentUser.sub),
+        memberId: new Types.ObjectId(memberId),
+        purpose: 'kyc_blocking_mismatch_approval',
+        boundDecisionVersion: payload.boundDecisionVersion ?? 0,
+        consumedAt: { $exists: false },
+        expiresAt: { $gt: new Date() },
+      },
+      {
+        $set: {
+          consumedAt: new Date(),
+        },
+      },
+      {
+        new: true,
+      },
+    );
+
+    if (!consumedToken) {
+      await this.logStepUpFailure(currentUser, memberId, 'replayed_or_expired_token');
+      throw new UnauthorizedException('Step-up verification token is expired, invalid, or already used.');
+    }
+
+    const currentDecision = await this.auditService.getCurrentOnboardingReviewDecision(memberId);
+    const currentDecisionVersion = currentDecision?.decisionVersion ?? 0;
+    if (currentDecisionVersion !== consumedToken.boundDecisionVersion) {
+      await this.logStepUpFailure(currentUser, memberId, 'decision_version_mismatch');
+      throw new UnauthorizedException(
+        'Step-up verification token is no longer valid for the current onboarding decision state.',
+      );
+    }
+
+    return {
+      verifiedAt: payload.verifiedAt,
+      method: payload.method,
+      boundMemberId: memberId,
+      boundDecisionVersion: consumedToken.boundDecisionVersion,
+    };
   }
 
   async getCurrentSession(currentUser: AuthenticatedUser) {
@@ -1047,6 +1288,30 @@ export class AuthService implements OnModuleInit {
 
   private hashSecret(value: string) {
     return hashSecret(value);
+  }
+
+  private async logStepUpFailure(
+    currentUser: AuthenticatedUser,
+    memberId: string,
+    reasonCode: string,
+  ) {
+    try {
+      await this.auditService.logActorAction({
+        actorId: currentUser.sub,
+        actorRole: currentUser.role,
+        actionType: 'staff_step_up_verification_failed',
+        entityType: 'member',
+        entityId: memberId,
+        after: {
+          reasonCode,
+          purpose: 'kyc_blocking_mismatch_approval',
+        },
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to write step-up failure audit for member=${memberId} reason=${reasonCode}`,
+      );
+    }
   }
 
   private async resolvePreferredBranch(dto: RegisterMemberDto) {

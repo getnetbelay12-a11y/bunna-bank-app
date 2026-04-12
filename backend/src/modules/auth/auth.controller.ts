@@ -15,6 +15,7 @@ import {
   ResetPinDto,
   StartLoginDto,
   StaffLoginDto,
+  VerifyStaffStepUpDto,
   VerifyPinLoginDto,
   VerifyOtpDto,
 } from './dto';
@@ -103,6 +104,15 @@ export class AuthController {
   @Post('logout')
   logout(@CurrentUser() currentUser: AuthenticatedUser) {
     return this.authService.logout(currentUser);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('staff/verify-step-up')
+  verifyStaffStepUp(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Body() dto: VerifyStaffStepUpDto,
+  ) {
+    return this.authService.verifyStaffStepUp(currentUser, dto);
   }
 
   @UseGuards(JwtAuthGuard)

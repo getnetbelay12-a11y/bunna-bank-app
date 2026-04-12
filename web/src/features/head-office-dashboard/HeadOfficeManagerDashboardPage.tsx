@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { useAppClient } from '../../app/AppContext';
 import type {
+  AuditLogItem,
   AutopayOperationItem,
   HeadOfficeCommandCenterSummary,
   InsuranceAlertItem,
@@ -11,6 +12,8 @@ import type {
   RolePerformanceItem,
   RolePerformanceOverview,
   SchoolConsoleOverview,
+  SecurityReviewMetrics,
+  ServiceRequestItem,
   SupportChatSummaryItem,
 } from '../../core/api/contracts';
 import { getAccessToken } from '../../core/api/httpApi';
@@ -49,11 +52,13 @@ type HeadOfficeManagerDashboardPageProps = {
   onOpenKycMember?: (memberId: string) => void;
   onOpenVote?: (voteId: string) => void;
   onOpenAuditEntity?: (entity: string) => void;
-  onOpenAuditWorkspace?: () => void;
+  onOpenAuditWorkspace?: (actionType?: string) => void;
   onOpenRisk?: () => void;
+  onOpenServiceRequests?: () => void;
 };
 
 const periods: PerformancePeriod[] = ['today', 'week', 'month', 'year'];
+const SUPPORTED_SECURITY_REVIEW_METRICS_CONTRACT_VERSION = 'security_review_metrics.v2';
 
 export function HeadOfficeManagerDashboardPage({
   session,
@@ -68,8 +73,9 @@ export function HeadOfficeManagerDashboardPage({
   onOpenAuditEntity,
   onOpenAuditWorkspace,
   onOpenRisk,
+  onOpenServiceRequests,
 }: HeadOfficeManagerDashboardPageProps) {
-  const { dashboardApi, notificationApi, schoolConsoleApi, supportApi } = useAppClient();
+  const { auditApi, dashboardApi, notificationApi, schoolConsoleApi, serviceRequestApi, supportApi } = useAppClient();
   const [period, setPeriod] = useState<PerformancePeriod>('week');
   const [activeView, setActiveView] = useState<'operations' | 'queues' | 'governance'>(
     'operations',
@@ -90,6 +96,9 @@ export function HeadOfficeManagerDashboardPage({
   const [openChats, setOpenChats] = useState<SupportChatSummaryItem[]>([]);
   const [insuranceAlerts, setInsuranceAlerts] = useState<InsuranceAlertItem[]>([]);
   const [autopayOperations, setAutopayOperations] = useState<AutopayOperationItem[]>([]);
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequestItem[]>([]);
+  const [securityReviewMetrics, setSecurityReviewMetrics] = useState<SecurityReviewMetrics | null>(null);
+  const [compatibilityAuditAlerts, setCompatibilityAuditAlerts] = useState<AuditLogItem[]>([]);
   const [kycQueueCount, setKycQueueCount] = useState(0);
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
   const [demoMessage, setDemoMessage] = useState<string | null>(null);
@@ -106,6 +115,9 @@ export function HeadOfficeManagerDashboardPage({
       dashboardApi.getBranchPerformance(session.role),
       dashboardApi.getOnboardingReviewQueue(session.role),
       dashboardApi.getAutopayOperations(session.role),
+      auditApi.getByEntity(session.role),
+      serviceRequestApi?.getRequests() ?? Promise.resolve({ items: [], total: 0, page: 1, limit: 20 }),
+      serviceRequestApi?.getSecurityReviewMetrics?.() ?? Promise.resolve(null),
       supportApi.getOpenChats(),
       notificationApi.getInsuranceAlerts(),
       schoolConsoleApi?.getOverview() ?? Promise.resolve(null),
@@ -117,6 +129,9 @@ export function HeadOfficeManagerDashboardPage({
       branchPerformanceResult,
       onboardingQueue,
       autopayResult,
+      auditLogResult,
+      serviceRequestResult,
+      securityReviewMetricsResult,
       openChatResult,
       insuranceResult,
       schoolOverviewResult,
@@ -132,6 +147,16 @@ export function HeadOfficeManagerDashboardPage({
       setBranchPerformance(branchPerformanceResult);
       setKycQueueCount(onboardingQueue.length);
       setAutopayOperations(autopayResult);
+      setCompatibilityAuditAlerts(
+        auditLogResult
+          .filter(
+            (item) => item.action === 'unsupported_security_review_metrics_contract_detected',
+          )
+          .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+          .slice(0, 3),
+      );
+      setServiceRequests(serviceRequestResult.items);
+      setSecurityReviewMetrics(securityReviewMetricsResult);
       setOpenChats(openChatResult);
       setInsuranceAlerts(insuranceResult);
       setSchoolOverview(schoolOverviewResult);
@@ -140,7 +165,7 @@ export function HeadOfficeManagerDashboardPage({
     return () => {
       cancelled = true;
     };
-  }, [dashboardApi, notificationApi, period, schoolConsoleApi, session.role, supportApi]);
+  }, [auditApi, dashboardApi, notificationApi, period, schoolConsoleApi, serviceRequestApi, session.role, supportApi]);
 
   const items = overview?.items ?? [];
   const kpis = overview?.kpis;
@@ -171,8 +196,52 @@ export function HeadOfficeManagerDashboardPage({
   const autopayFailuresCount = autopayOperations.filter(
     (item) => item.operationalStatus === 'paused' || item.actionRequired.trim().length > 0,
   ).length;
+  const securityReviewItems = serviceRequests.filter((item) => item.type === 'security_review');
+  const fallbackSecurityMetrics = buildSecurityTrendMetrics(securityReviewItems);
+  const hasSupportedSecurityReviewMetrics =
+    securityReviewMetrics?.metadata.contractVersion ===
+    SUPPORTED_SECURITY_REVIEW_METRICS_CONTRACT_VERSION;
+  const hasUnsupportedSecurityReviewMetrics =
+    securityReviewMetrics != null && !hasSupportedSecurityReviewMetrics;
+  const breachedSecurityReviewsCount =
+    (hasSupportedSecurityReviewMetrics
+      ? securityReviewMetrics.currentState.breachedCount
+      : null) ??
+    securityReviewItems.filter((item) => item.slaState === 'overdue').length;
+  const dueSoonSecurityReviewsCount =
+    (hasSupportedSecurityReviewMetrics
+      ? securityReviewMetrics.currentState.dueSoonCount
+      : null) ??
+    securityReviewItems.filter((item) => item.slaState === 'due_soon').length;
+  const stalledSecurityReviewsCount =
+    (hasSupportedSecurityReviewMetrics
+      ? securityReviewMetrics.currentState.stalledCount
+      : null) ??
+    securityReviewItems.filter((item) => item.followUpState === 'investigation_stalled').length;
+  const takeoverSecurityReviewsCount =
+    (hasSupportedSecurityReviewMetrics
+      ? securityReviewMetrics.currentState.takeoverCount
+      : null) ??
+    securityReviewItems.filter((item) => typeof item.escalatedAt === 'string' && item.escalatedAt.trim().length > 0).length;
+  const securityTrend =
+    hasSupportedSecurityReviewMetrics
+      ? buildSecurityTrendMetricsFromBackend(securityReviewMetrics)
+      : fallbackSecurityMetrics;
+  const securityMetricBasisLabel =
+    securityReviewMetrics == null
+      ? 'Fallback: all values derived from current loaded queue rows'
+      : hasSupportedSecurityReviewMetrics
+        ? `Contract ${securityReviewMetrics.metadata.contractVersion}. Current state from live queue. Trend from retained history (${securityReviewMetrics.metadata.retentionWindowDays}d retention basis).`
+        : `Unsupported contract ${securityReviewMetrics.metadata.contractVersion}. Falling back to current loaded queue rows only.`;
+  const compatibilityAlertCount = compatibilityAuditAlerts.length;
   const totalAlertsCount =
-    overdueLoansCount + missingDocumentsCount + expiringInsuranceCount + unansweredChatsCount;
+    overdueLoansCount +
+    missingDocumentsCount +
+    expiringInsuranceCount +
+    unansweredChatsCount +
+    breachedSecurityReviewsCount +
+    stalledSecurityReviewsCount +
+    compatibilityAlertCount;
   const paidSchoolInvoicesCount =
     schoolOverview?.invoices.filter((item) => item.status === 'paid').length ?? 0;
   const unpaidSchoolInvoicesCount =
@@ -226,6 +295,36 @@ export function HeadOfficeManagerDashboardPage({
     }
   }
 
+  useEffect(() => {
+    if (
+      !hasUnsupportedSecurityReviewMetrics ||
+      !securityReviewMetrics ||
+      !serviceRequestApi?.reportSecurityReviewMetricsContractIssue
+    ) {
+      return;
+    }
+
+    const storageKey = `security-review-metrics-contract-warning:${securityReviewMetrics.metadata.contractVersion}`;
+    if (typeof window !== 'undefined' && window.sessionStorage.getItem(storageKey) === 'reported') {
+      return;
+    }
+
+    void serviceRequestApi
+      .reportSecurityReviewMetricsContractIssue({
+        detectedContractVersion: securityReviewMetrics.metadata.contractVersion,
+        supportedContractVersion: SUPPORTED_SECURITY_REVIEW_METRICS_CONTRACT_VERSION,
+        source: 'head_office_dashboard',
+      })
+      .then(() => {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(storageKey, 'reported');
+        }
+      })
+      .catch(() => {
+        // Keep the UI warning visible even if the durable signal write fails.
+      });
+  }, [hasUnsupportedSecurityReviewMetrics, securityReviewMetrics, serviceRequestApi]);
+
   return (
     <DashboardPage>
       <div className="head-office-page">
@@ -262,6 +361,43 @@ export function HeadOfficeManagerDashboardPage({
         <article className="head-office-mission-card head-office-mission-card-risk">
           <p className="eyebrow">Priority Signals</p>
           <h3>What requires executive attention now</h3>
+          {hasUnsupportedSecurityReviewMetrics ? (
+            <div
+              style={{
+                marginBottom: '0.9rem',
+                border: '1px solid rgba(217, 119, 6, 0.45)',
+                background:
+                  'linear-gradient(135deg, rgba(255, 247, 237, 0.96), rgba(254, 215, 170, 0.32))',
+                borderRadius: '18px',
+                padding: '0.9rem 1rem',
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.78rem',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'rgb(146, 64, 14)',
+                  fontWeight: 700,
+                }}
+              >
+                Reporting compatibility warning
+              </p>
+              <p
+                style={{
+                  margin: '0.35rem 0 0',
+                  color: 'rgb(120, 53, 15)',
+                  lineHeight: 1.5,
+                }}
+              >
+                Security-review metrics contract{' '}
+                <strong>{securityReviewMetrics.metadata.contractVersion}</strong> is not supported
+                by this dashboard. Queue counts and trend labels below are running in fallback mode
+                from currently loaded service-request rows, not the retained reporting contract.
+              </p>
+            </div>
+          ) : null}
           <div className="support-overview-stack">
             <DashboardMetricRow
               label="Overdue Loans"
@@ -277,6 +413,49 @@ export function HeadOfficeManagerDashboardPage({
               label="Insurance Risk"
               value={expiringInsuranceCount.toLocaleString()}
               note="Policies nearing expiry"
+            />
+            <DashboardMetricRow
+              label="Security SLA Breaches"
+              value={breachedSecurityReviewsCount.toLocaleString()}
+              note={`${dueSoonSecurityReviewsCount.toLocaleString()} due soon`}
+            />
+            <DashboardMetricRow
+              label="Security Stalled"
+              value={stalledSecurityReviewsCount.toLocaleString()}
+              note={`${takeoverSecurityReviewsCount.toLocaleString()} manager takeovers`}
+            />
+            <DashboardMetricRow
+              label="Security Trend"
+              value={securityTrend.stalledTrendLabel}
+              note={securityTrend.takeoverTrendLabel}
+            />
+            <DashboardMetricRow
+              label="Security Metric Basis"
+              value={
+                securityReviewMetrics == null
+                  ? 'Fallback mode'
+                  : hasSupportedSecurityReviewMetrics
+                    ? securityReviewMetrics.metadata.contractVersion
+                    : 'Unsupported contract'
+              }
+              note={securityMetricBasisLabel}
+            />
+            <DashboardMetricRow
+              label="Reporting Contract Alerts"
+              value={compatibilityAlertCount.toLocaleString()}
+              note={
+                compatibilityAlertCount > 0
+                  ? `Latest: ${formatCompatibilityAlertLabel(compatibilityAuditAlerts[0])}`
+                  : 'No unsupported security metrics contracts detected'
+              }
+              onClick={
+                compatibilityAlertCount > 0
+                  ? () =>
+                      onOpenAuditWorkspace?.(
+                        'unsupported_security_review_metrics_contract_detected',
+                      )
+                  : undefined
+              }
             />
           </div>
         </article>
@@ -340,8 +519,27 @@ export function HeadOfficeManagerDashboardPage({
             icon: 'AL',
             label: 'Alerts',
             value: totalAlertsCount.toLocaleString(),
-            trend: `${criticalDistrictCount.toLocaleString()} critical districts`,
+            trend:
+              stalledSecurityReviewsCount > 0
+                ? `${stalledSecurityReviewsCount.toLocaleString()} stalled security reviews`
+                : breachedSecurityReviewsCount > 0
+                  ? `${breachedSecurityReviewsCount.toLocaleString()} breached security reviews`
+                : `${criticalDistrictCount.toLocaleString()} critical districts`,
             trendDirection: 'down',
+          },
+          {
+            icon: 'SR',
+            label: 'Security Stalls',
+            value: stalledSecurityReviewsCount.toLocaleString(),
+            trend: securityTrend.stalledTrendLabel,
+            trendDirection: securityTrend.stalledTrendDirection,
+          },
+          {
+            icon: 'TK',
+            label: 'Takeovers',
+            value: takeoverSecurityReviewsCount.toLocaleString(),
+            trend: securityTrend.takeoverTrendLabel,
+            trendDirection: securityTrend.takeoverTrendDirection,
           },
         ]}
       />
@@ -365,6 +563,18 @@ export function HeadOfficeManagerDashboardPage({
             value: unansweredChatsCount.toLocaleString(),
             tone: 'red',
             onClick: () => onOpenSupportWorkspace?.(),
+          },
+          {
+            label: 'Security Breaches',
+            value: breachedSecurityReviewsCount.toLocaleString(),
+            tone: breachedSecurityReviewsCount > 0 ? 'red' : 'amber',
+            onClick: () => onOpenServiceRequests?.(),
+          },
+          {
+            label: 'Security Takeovers',
+            value: takeoverSecurityReviewsCount.toLocaleString(),
+            tone: stalledSecurityReviewsCount > 0 ? 'orange' : 'amber',
+            onClick: () => onOpenServiceRequests?.(),
           },
           {
             label: 'Expiring Insurance',
@@ -1098,6 +1308,128 @@ function compareDistricts(
     default:
       return right.score - left.score;
   }
+}
+
+function buildSecurityTrendMetrics(items: ServiceRequestItem[]) {
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const currentWindowStart = now - sevenDaysMs;
+  const previousWindowStart = now - 2 * sevenDaysMs;
+
+  const currentStalled = items.filter((item) => {
+    const timestamp = parseSecurityTimestamp(item.investigationStalledAt);
+    return timestamp != null && timestamp >= currentWindowStart;
+  }).length;
+  const previousStalled = items.filter((item) => {
+    const timestamp = parseSecurityTimestamp(item.investigationStalledAt);
+    return timestamp != null && timestamp >= previousWindowStart && timestamp < currentWindowStart;
+  }).length;
+
+  const currentTakeovers = items.filter((item) => {
+    const timestamp = parseSecurityTimestamp(item.escalatedAt);
+    return timestamp != null && timestamp >= currentWindowStart;
+  }).length;
+  const previousTakeovers = items.filter((item) => {
+    const timestamp = parseSecurityTimestamp(item.escalatedAt);
+    return timestamp != null && timestamp >= previousWindowStart && timestamp < currentWindowStart;
+  }).length;
+
+  return {
+    stalledTrendLabel: formatWindowTrend(currentStalled, previousStalled, '7d vs prev 7d stalled'),
+    stalledTrendDirection: resolveTrendDirection(currentStalled, previousStalled, true),
+    takeoverTrendLabel: formatWindowTrend(currentTakeovers, previousTakeovers, '7d vs prev 7d takeovers'),
+    takeoverTrendDirection: resolveTrendDirection(currentTakeovers, previousTakeovers, true),
+  };
+}
+
+function buildSecurityTrendMetricsFromBackend(metrics: SecurityReviewMetrics) {
+  return {
+    stalledTrendLabel: formatWindowTrend(
+      metrics.history.stalledLast7Days,
+      metrics.history.stalledPrevious7Days,
+      '7d vs prev 7d stalled',
+    ),
+    stalledTrendDirection: resolveTrendDirection(
+      metrics.history.stalledLast7Days,
+      metrics.history.stalledPrevious7Days,
+      true,
+    ),
+    takeoverTrendLabel: formatWindowTrend(
+      metrics.history.takeoversLast7Days,
+      metrics.history.takeoversPrevious7Days,
+      '7d vs prev 7d takeovers',
+    ),
+    takeoverTrendDirection: resolveTrendDirection(
+      metrics.history.takeoversLast7Days,
+      metrics.history.takeoversPrevious7Days,
+      true,
+    ),
+  };
+}
+
+function formatCompatibilityAlertLabel(item?: AuditLogItem) {
+  if (!item) {
+    return 'n/a';
+  }
+
+  const detectedVersion =
+    typeof item.after?.detectedContractVersion === 'string'
+      ? item.after.detectedContractVersion
+      : 'unknown';
+  return `${detectedVersion} at ${formatCompactTimestamp(item.timestamp)}`;
+}
+
+function parseSecurityTimestamp(value?: string) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function formatCompactTimestamp(value?: string) {
+  if (!value) {
+    return 'n/a';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatWindowTrend(current: number, previous: number, suffix: string) {
+  const delta = current - previous;
+  if (delta === 0) {
+    return `Flat ${suffix}`;
+  }
+
+  const direction = delta > 0 ? '+' : '';
+  return `${direction}${delta} ${suffix}`;
+}
+
+function resolveTrendDirection(
+  current: number,
+  previous: number,
+  lowerIsBetter: boolean,
+): 'up' | 'down' | 'neutral' {
+  if (current === previous) {
+    return 'neutral';
+  }
+
+  if (lowerIsBetter) {
+    return current < previous ? 'up' : 'down';
+  }
+
+  return current > previous ? 'up' : 'down';
 }
 
 function resolveDemoApiBaseUrl() {

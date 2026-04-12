@@ -13,6 +13,7 @@ describe('NotificationsService', () => {
   let notificationModel: {
     create: jest.Mock;
     find: jest.Mock;
+    findOne: jest.Mock;
     findById: jest.Mock;
   };
   let provider: { dispatch: jest.Mock };
@@ -22,6 +23,7 @@ describe('NotificationsService', () => {
     notificationModel = {
       create: jest.fn(),
       find: jest.fn(),
+      findOne: jest.fn(),
       findById: jest.fn(),
     };
     provider = {
@@ -163,6 +165,109 @@ describe('NotificationsService', () => {
 
     expect(save).toHaveBeenCalled();
     expect(result.status).toBe(NotificationStatus.READ);
+  });
+
+  it('aggregates repeated staff security breach notifications inside the digest window', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const userId = new Types.ObjectId();
+    notificationModel.findOne.mockReturnValue({
+      sort: jest.fn().mockResolvedValue({
+        _id: new Types.ObjectId(),
+        userType: 'staff',
+        userId,
+        userRole: UserRole.HEAD_OFFICE_MANAGER,
+        type: NotificationType.SYSTEM,
+        channel: NotificationChannel.MOBILE_PUSH,
+        status: NotificationStatus.SENT,
+        title: 'Security review SLA breached',
+        message: '1 security review SLA breach requires head office attention.',
+        priority: 'high',
+        dataPayload: {
+          securityBreachDigestCount: 1,
+          serviceRequestIds: ['req_1'],
+        },
+        save,
+      }),
+    });
+
+    const result = await service.notifyStaffSecurityBreachDigest({
+      userId: userId.toString(),
+      userRole: UserRole.HEAD_OFFICE_MANAGER,
+      serviceRequestId: '507f1f77bcf86cd799439011',
+    });
+
+    expect(save).toHaveBeenCalled();
+    expect(result.message).toContain('2 security review SLA breaches');
+    expect(result.dataPayload?.securityBreachDigestCount).toBe(2);
+  });
+
+  it('creates a fresh staff security breach notification when no digest exists', async () => {
+    const notificationId = new Types.ObjectId();
+    notificationModel.findOne.mockReturnValue({
+      sort: jest.fn().mockResolvedValue(null),
+    });
+    provider.dispatch.mockResolvedValue({
+      channel: NotificationChannel.MOBILE_PUSH,
+      status: NotificationStatus.SENT,
+    });
+    notificationModel.create.mockResolvedValue({
+      _id: notificationId,
+      userType: 'staff',
+      userId: new Types.ObjectId(),
+      userRole: UserRole.HEAD_OFFICE_MANAGER,
+      type: NotificationType.SYSTEM,
+      channel: NotificationChannel.MOBILE_PUSH,
+      status: NotificationStatus.SENT,
+      title: 'Security review SLA breached',
+      message: '1 security review SLA breach requires head office attention.',
+      priority: 'high',
+      dataPayload: {
+        securityBreachDigestCount: 1,
+      },
+    });
+
+    const result = await service.notifyStaffSecurityBreachDigest({
+      userId: new Types.ObjectId().toString(),
+      userRole: UserRole.HEAD_OFFICE_MANAGER,
+      serviceRequestId: '507f1f77bcf86cd799439011',
+    });
+
+    expect(notificationModel.create).toHaveBeenCalled();
+    expect(result.title).toBe('Security review SLA breached');
+  });
+
+  it('aggregates repeated stalled-investigation notifications inside the digest window', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const userId = new Types.ObjectId();
+    notificationModel.findOne.mockReturnValue({
+      sort: jest.fn().mockResolvedValue({
+        _id: new Types.ObjectId(),
+        userType: 'staff',
+        userId,
+        userRole: UserRole.ADMIN,
+        type: NotificationType.SYSTEM,
+        channel: NotificationChannel.MOBILE_PUSH,
+        status: NotificationStatus.SENT,
+        title: 'Security investigation stalled',
+        message: '1 acknowledged security review still has no active investigation.',
+        priority: 'high',
+        dataPayload: {
+          securityInvestigationStallCount: 1,
+          serviceRequestIds: ['req_1'],
+        },
+        save,
+      }),
+    });
+
+    const result = await service.notifyStaffSecurityInvestigationStalledDigest({
+      userId: userId.toString(),
+      userRole: UserRole.ADMIN,
+      serviceRequestId: '507f1f77bcf86cd799439011',
+    });
+
+    expect(save).toHaveBeenCalled();
+    expect(result.message).toContain('2 acknowledged security reviews');
+    expect(result.dataPayload?.securityInvestigationStallCount).toBe(2);
   });
 
   it('rejects marking another user notification as read', async () => {

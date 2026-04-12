@@ -8,6 +8,7 @@ import type {
   NotificationCategory,
   NotificationCampaignItem,
   NotificationCenterItem,
+  OnboardingEvidenceDetail,
   OnboardingReviewItem,
   PerformanceSummaryItem,
   RolePerformanceItem,
@@ -32,6 +33,45 @@ import { SimpleTable } from '../../shared/components/SimpleTable';
 type SessionProps = {
   session: AdminSession;
 };
+
+type ApprovalModalState = {
+  memberId: string;
+  note: string;
+  blockingMismatchFields: string[];
+  supersessionFields: string[];
+  evidence: OnboardingEvidenceDetail;
+  canApproveBlockingMismatch: boolean;
+  approvalReasonCode: string;
+  approvalJustification: string;
+  stepUpPassword: string;
+  mismatchAcknowledgements: Record<string, boolean>;
+  supersessionAcknowledgements: Record<string, boolean>;
+  error?: string;
+};
+
+const MIN_APPROVAL_JUSTIFICATION_LENGTH = 30;
+
+const APPROVAL_SUPERSESSION_FIELDS = [
+  'status',
+  'note',
+  'approvalReasonCode',
+  'approvalJustification',
+  'acknowledgedMismatchFields',
+] as const;
+
+function resolveSupersessionReasonCode(
+  status: 'review_in_progress' | 'needs_action' | 'approved',
+) {
+  if (status === 'review_in_progress') {
+    return 'review_progressed';
+  }
+
+  if (status === 'needs_action') {
+    return 'customer_update_requested';
+  }
+
+  return 'approval_recorded';
+}
 
 export function MembersPage({ session }: SessionProps) {
   const { dashboardApi } = useAppClient();
@@ -129,8 +169,11 @@ export function KycVerificationPage({
   returnContextLabel?: string;
   onReturnToContext?: () => void;
 }) {
-  const { dashboardApi } = useAppClient();
+  const { authApi, dashboardApi } = useAppClient();
   const [items, setItems] = useState<OnboardingReviewItem[]>([]);
+  const [selectedEvidence, setSelectedEvidence] = useState<OnboardingEvidenceDetail | null>(null);
+  const [evidencePreviewUrls, setEvidencePreviewUrls] = useState<Record<string, string>>({});
+  const [approvalModal, setApprovalModal] = useState<ApprovalModalState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +188,12 @@ export function KycVerificationPage({
       cancelled = true;
     };
   }, [dashboardApi, session.role]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(evidencePreviewUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [evidencePreviewUrls]);
 
   const counts = {
     submitted: items.filter((item) => item.onboardingReviewStatus === 'submitted').length,
@@ -163,6 +212,25 @@ export function KycVerificationPage({
     memberId: string,
     status: 'review_in_progress' | 'needs_action' | 'approved',
   ) => {
+    let evidence = selectedEvidence?.memberId === memberId ? selectedEvidence : null;
+    if (
+      status === 'approved' &&
+      evidence == null &&
+      dashboardApi.getOnboardingEvidenceDetail != null
+    ) {
+      evidence = await dashboardApi.getOnboardingEvidenceDetail(memberId);
+    }
+
+    const blockingMismatchFields =
+      evidence?.mismatches
+        .filter((item) =>
+          evidence?.reviewPolicy.blockingMismatchFields.includes(item.field),
+        )
+        .map((item) => item.field) ?? [];
+    const canApproveBlockingMismatch =
+      evidence == null ||
+      evidence.reviewPolicy.blockingMismatchApprovalRoles.includes(session.role);
+
     const note =
       status === 'needs_action'
         ? 'Staff marked this onboarding package for customer correction.'
@@ -170,14 +238,219 @@ export function KycVerificationPage({
           ? 'Staff approved onboarding after Fayda and selfie review.'
           : 'Staff moved this onboarding package into active review.';
 
+    if (status === 'approved' && evidence != null && blockingMismatchFields.length > 0) {
+      setApprovalModal({
+        memberId,
+        note,
+        blockingMismatchFields,
+        supersessionFields: [...APPROVAL_SUPERSESSION_FIELDS],
+        evidence,
+        canApproveBlockingMismatch,
+        approvalReasonCode: '',
+        approvalJustification: '',
+        stepUpPassword: '',
+        mismatchAcknowledgements: Object.fromEntries(
+          blockingMismatchFields.map((field) => [field, false]),
+        ),
+        supersessionAcknowledgements: Object.fromEntries(
+          APPROVAL_SUPERSESSION_FIELDS.map((field) => [field, false]),
+        ),
+      });
+      return;
+    }
+
     const updated = await dashboardApi.updateOnboardingReview(memberId, {
       status,
       note,
+      supersessionReasonCode: resolveSupersessionReasonCode(status),
+      acknowledgedSupersessionFields: ['status', 'note'],
     });
 
     setItems((current) =>
       current.map((item) => (item.memberId === memberId ? updated : item)),
     );
+  };
+
+  const handleOpenEvidence = async (memberId: string) => {
+    if (
+      dashboardApi.getOnboardingEvidenceDetail == null ||
+      dashboardApi.getProtectedDocumentBlob == null
+    ) {
+      return;
+    }
+
+    const fetchProtectedDocumentBlob = dashboardApi.getProtectedDocumentBlob;
+    const detail = await dashboardApi.getOnboardingEvidenceDetail(memberId);
+
+    const documentEntries = Object.entries(detail.documents).filter((entry): entry is [
+      string,
+      NonNullable<OnboardingEvidenceDetail['documents'][keyof OnboardingEvidenceDetail['documents']]>,
+    ] => Boolean(entry[1]?.storageKey));
+
+    const previewPairs = await Promise.all(
+      documentEntries.map(async ([key, document]) => {
+        const blob = await fetchProtectedDocumentBlob(document.storageKey);
+        return [key, URL.createObjectURL(blob)] as const;
+      }),
+    );
+
+    setEvidencePreviewUrls((current) => {
+      Object.values(current).forEach((url) => URL.revokeObjectURL(url));
+      return Object.fromEntries(previewPairs);
+    });
+    setSelectedEvidence(detail);
+  };
+
+  const handleApproveWithModal = async () => {
+    if (approvalModal == null) {
+      return;
+    }
+
+    if (!approvalModal.canApproveBlockingMismatch) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: `Blocking mismatches require one of these roles: ${current.evidence.reviewPolicy.blockingMismatchApprovalRoles.join(
+                ', ',
+              )}. Your role is ${session.role}.`,
+            },
+      );
+      return;
+    }
+
+    if (
+      !approvalModal.evidence.reviewPolicy.blockingMismatchApprovalReasonCodes.includes(
+        approvalModal.approvalReasonCode,
+      )
+    ) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: 'Select a valid approval reason code before approving this case.',
+            },
+      );
+      return;
+    }
+
+    if (!approvalModal.approvalJustification.trim()) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: 'Approval justification is required for blocking mismatches.',
+            },
+      );
+      return;
+    }
+
+    if (!approvalModal.stepUpPassword.trim()) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: 'Re-enter your staff password before approving this high-risk case.',
+            },
+      );
+      return;
+    }
+
+    if (
+      approvalModal.approvalJustification.trim().length <
+      MIN_APPROVAL_JUSTIFICATION_LENGTH
+    ) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: `Approval justification must be at least ${MIN_APPROVAL_JUSTIFICATION_LENGTH} characters.`,
+            },
+      );
+      return;
+    }
+
+    const unacknowledgedFields = approvalModal.blockingMismatchFields.filter(
+      (field) => !approvalModal.mismatchAcknowledgements[field],
+    );
+    if (unacknowledgedFields.length > 0) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: `Acknowledge each blocking mismatch before approval: ${unacknowledgedFields.join(
+                ', ',
+              )}.`,
+            },
+      );
+      return;
+    }
+
+    const unacknowledgedSupersessionFields = approvalModal.supersessionFields.filter(
+      (field) => !approvalModal.supersessionAcknowledgements[field],
+    );
+    if (unacknowledgedSupersessionFields.length > 0) {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: `Acknowledge each supersession change before approval: ${unacknowledgedSupersessionFields.join(
+                ', ',
+              )}.`,
+            },
+      );
+      return;
+    }
+
+    let stepUpToken: string | undefined;
+    try {
+      stepUpToken =
+        authApi.verifyStaffStepUp == null
+          ? undefined
+          : (
+              await authApi.verifyStaffStepUp({
+                password: approvalModal.stepUpPassword,
+                memberId: approvalModal.memberId,
+              })
+            ).stepUpToken;
+    } catch {
+      setApprovalModal((current) =>
+        current == null
+          ? null
+          : {
+              ...current,
+              error: 'Step-up verification failed. Re-enter your password and try again.',
+            },
+      );
+      return;
+    }
+
+    const updated = await dashboardApi.updateOnboardingReview(approvalModal.memberId, {
+      stepUpToken,
+      status: 'approved',
+      note: approvalModal.note,
+      approvalReasonCode: approvalModal.approvalReasonCode,
+      supersessionReasonCode: resolveSupersessionReasonCode('approved'),
+      approvalJustification: approvalModal.approvalJustification.trim(),
+      acknowledgedMismatchFields: approvalModal.blockingMismatchFields.filter(
+        (field) => approvalModal.mismatchAcknowledgements[field],
+      ),
+      acknowledgedSupersessionFields: approvalModal.supersessionFields.filter(
+        (field) => approvalModal.supersessionAcknowledgements[field],
+      ),
+    });
+
+    setItems((current) =>
+      current.map((item) => (item.memberId === approvalModal.memberId ? updated : item)),
+    );
+    setApprovalModal(null);
   };
 
   return (
@@ -232,6 +505,7 @@ export function KycVerificationPage({
             'Branch',
             'Review stage',
             'Identity state',
+            'Evidence review',
             'Customer next step',
             'Review action',
           ]}
@@ -242,8 +516,47 @@ export function KycVerificationPage({
                   item.branchName ?? 'Unassigned',
                   item.onboardingReviewStatus.replace(/_/g, ' '),
                   `${item.identityVerificationStatus} / ${item.kycStatus}`,
+                  <div key={`${item.memberId}-evidence`} style={{ display: 'grid', gap: 4 }}>
+                    <span>
+                      Docs:{' '}
+                      {[
+                        item.onboardingEvidence?.hasFaydaFrontImage ? 'front' : null,
+                        item.onboardingEvidence?.hasFaydaBackImage ? 'back' : null,
+                        item.onboardingEvidence?.hasSelfieImage ? 'selfie' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || 'missing'}
+                    </span>
+                    <span>
+                      Extracted:{' '}
+                      {item.onboardingEvidence?.extractedFullName ??
+                        item.memberName}
+                      {item.onboardingEvidence?.extractedFaydaFinMasked
+                        ? ` / ${item.onboardingEvidence.extractedFaydaFinMasked}`
+                        : ''}
+                    </span>
+                    <span>
+                      Conflicts:{' '}
+                      {item.onboardingEvidence?.reviewRequiredFields?.length
+                        ? item.onboardingEvidence.reviewRequiredFields.join(', ')
+                        : 'none'}
+                    </span>
+                    {item.onboardingEvidence?.dateOfBirthCandidates?.length ? (
+                      <span>
+                        DOB candidates:{' '}
+                        {item.onboardingEvidence.dateOfBirthCandidates.join(' or ')}
+                      </span>
+                    ) : null}
+                  </div>,
                   item.requiredAction,
                   <div key={item.memberId} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => void handleOpenEvidence(item.memberId)}
+                    >
+                      Review evidence
+                    </button>
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -267,9 +580,378 @@ export function KycVerificationPage({
                     </button>
                   </div>,
                 ])
-              : [['No onboarding reviews', '-', '-', '-', '-', '-']]
+              : [['No onboarding reviews', '-', '-', '-', '-', '-', '-']]
           }
         />
+        {selectedEvidence ? (
+          <DashboardSectionCard
+            title={`Evidence Review: ${selectedEvidence.memberName}`}
+            description="Authenticated reviewer view of uploaded Fayda documents, selfie evidence, and extracted identity conflicts."
+          >
+            <div className="dashboard-stack">
+              <DashboardMetricRow
+                label="Customer"
+                value={`${selectedEvidence.customerId} / ${selectedEvidence.phoneNumber ?? 'No phone'}`}
+                note={selectedEvidence.branchName ?? 'No branch'}
+              />
+              <DashboardMetricRow
+                label="Review status"
+                value={`${selectedEvidence.onboardingReviewStatus} / ${selectedEvidence.identityVerificationStatus}`}
+                note={selectedEvidence.reviewNote ?? 'No review note yet'}
+              />
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gap: 16,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                marginTop: 16,
+              }}
+            >
+              {([
+                ['faydaFront', 'Fayda front'],
+                ['faydaBack', 'Fayda back'],
+                ['selfie', 'Selfie'],
+              ] as const).map(([key, label]) => {
+                const document = selectedEvidence.documents[key];
+                return (
+                  <Panel key={key} title={label}>
+                    {document ? (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {evidencePreviewUrls[key] ? (
+                          <img
+                            src={evidencePreviewUrls[key]}
+                            alt={label}
+                            style={{
+                              width: '100%',
+                              maxHeight: 220,
+                              objectFit: 'cover',
+                              borderRadius: 12,
+                              border: '1px solid #d8e3f5',
+                            }}
+                          />
+                        ) : null}
+                        <span>{document.originalFileName ?? document.storageKey}</span>
+                        <span>{document.mimeType ?? 'Unknown type'}</span>
+                      </div>
+                    ) : (
+                      <span>Document not available.</span>
+                    )}
+                  </Panel>
+                );
+              })}
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gap: 16,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                marginTop: 16,
+              }}
+            >
+              <Panel title="Submitted profile">
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <span>Full name: {selectedEvidence.submittedProfile.fullName ?? 'Not found'}</span>
+                  <span>DOB: {selectedEvidence.submittedProfile.dateOfBirth ?? 'Not found'}</span>
+                  <span>Phone: {selectedEvidence.submittedProfile.phoneNumber ?? 'Not found'}</span>
+                  <span>Region: {selectedEvidence.submittedProfile.region ?? 'Not found'}</span>
+                  <span>City: {selectedEvidence.submittedProfile.city ?? 'Not found'}</span>
+                  <span>FIN: {selectedEvidence.submittedProfile.faydaFinMasked ?? 'Not found'}</span>
+                </div>
+              </Panel>
+              <Panel title="Extracted Fayda data">
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <span>Full name: {selectedEvidence.extractedFaydaData?.fullName ?? 'Not found'}</span>
+                  <span>DOB: {selectedEvidence.extractedFaydaData?.dateOfBirth ?? 'Not found'}</span>
+                  <span>Phone: {selectedEvidence.extractedFaydaData?.phoneNumber ?? 'Not found'}</span>
+                  <span>Region: {selectedEvidence.extractedFaydaData?.region ?? 'Not found'}</span>
+                  <span>City: {selectedEvidence.extractedFaydaData?.city ?? 'Not found'}</span>
+                  <span>FIN: {selectedEvidence.extractedFaydaData?.faydaFinMasked ?? 'Not found'}</span>
+                  <span>Method: {selectedEvidence.extractedFaydaData?.extractionMethod ?? 'Unknown'}</span>
+                </div>
+              </Panel>
+              <Panel title="Mismatch review">
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <span>
+                    Policy version: {selectedEvidence.reviewPolicy.policyVersion}
+                  </span>
+                  <span>
+                    Blocking mismatch policy:{' '}
+                    {selectedEvidence.reviewPolicy.blockingMismatchFields.join(', ')}
+                  </span>
+                  <span>
+                    Allowed approval roles:{' '}
+                    {selectedEvidence.reviewPolicy.blockingMismatchApprovalRoles.join(', ')}
+                  </span>
+                  <span>
+                    Approval reason codes:{' '}
+                    {selectedEvidence.reviewPolicy.blockingMismatchApprovalReasonCodes.join(', ')}
+                  </span>
+                  <span>
+                    Approval justification required:{' '}
+                    {selectedEvidence.reviewPolicy.requireApprovalJustification ? 'yes' : 'no'}
+                  </span>
+                  <span>
+                    Review required:{' '}
+                    {selectedEvidence.extractedFaydaData?.reviewRequiredFields?.length
+                      ? selectedEvidence.extractedFaydaData.reviewRequiredFields.join(', ')
+                      : 'none'}
+                  </span>
+                  <span>
+                    DOB candidates:{' '}
+                    {selectedEvidence.extractedFaydaData?.dateOfBirthCandidates?.length
+                      ? selectedEvidence.extractedFaydaData.dateOfBirthCandidates.join(' or ')
+                      : 'none'}
+                  </span>
+                  <span>
+                    Expiry candidates:{' '}
+                    {selectedEvidence.extractedFaydaData?.expiryDateCandidates?.length
+                      ? selectedEvidence.extractedFaydaData.expiryDateCandidates.join(' or ')
+                      : 'none'}
+                  </span>
+                  <span>
+                    Submitted vs extracted mismatches:{' '}
+                    {selectedEvidence.mismatches.length > 0
+                      ? selectedEvidence.mismatches.map((item) => item.field).join(', ')
+                      : 'none'}
+                  </span>
+                  {selectedEvidence.mismatches.map((item) => (
+                    <div
+                      key={item.field}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        border: '1px solid #f59e0b',
+                        background: '#fff7ed',
+                      }}
+                    >
+                      <strong>{item.field}</strong>
+                      <div>Submitted: {item.submittedValue ?? 'Missing'}</div>
+                      <div>Extracted: {item.extractedValue ?? 'Missing'}</div>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </div>
+          </DashboardSectionCard>
+        ) : null}
+        {approvalModal ? (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.45)',
+              display: 'grid',
+              placeItems: 'center',
+              padding: 24,
+              zIndex: 50,
+            }}
+          >
+            <div
+              style={{
+                width: 'min(720px, 100%)',
+                background: '#fff',
+                borderRadius: 20,
+                padding: 24,
+                boxShadow: '0 24px 60px rgba(15, 23, 42, 0.22)',
+                display: 'grid',
+                gap: 16,
+              }}
+            >
+              <div style={{ display: 'grid', gap: 6 }}>
+                <strong>Approve Blocking KYC Mismatches</strong>
+                <span>
+                  Member: {approvalModal.evidence.memberName} ({approvalModal.evidence.customerId})
+                </span>
+                <span>
+                  Blocking mismatches: {approvalModal.blockingMismatchFields.join(', ')}
+                </span>
+                <span>
+                  Allowed roles: {approvalModal.evidence.reviewPolicy.blockingMismatchApprovalRoles.join(', ')}
+                </span>
+                <span>
+                  Policy version: {approvalModal.evidence.reviewPolicy.policyVersion}
+                </span>
+              </div>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span>Approval reason code</span>
+                <select
+                  value={approvalModal.approvalReasonCode}
+                  onChange={(event) =>
+                    setApprovalModal((current) =>
+                      current == null
+                        ? null
+                        : {
+                            ...current,
+                            approvalReasonCode: event.target.value,
+                            error: undefined,
+                          },
+                    )
+                  }
+                >
+                  <option value="">Select a reason code</option>
+                  {approvalModal.evidence.reviewPolicy.blockingMismatchApprovalReasonCodes.map(
+                    (reasonCode) => (
+                      <option key={reasonCode} value={reasonCode}>
+                        {reasonCode}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span>Step-up password confirmation</span>
+                <input
+                  type="password"
+                  value={approvalModal.stepUpPassword}
+                  onChange={(event) =>
+                    setApprovalModal((current) =>
+                      current == null
+                        ? null
+                        : {
+                            ...current,
+                            stepUpPassword: event.target.value,
+                            error: undefined,
+                          },
+                    )
+                  }
+                  placeholder="Re-enter your staff password"
+                  autoComplete="current-password"
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span>Approval justification</span>
+                <textarea
+                  rows={5}
+                  value={approvalModal.approvalJustification}
+                  onChange={(event) =>
+                    setApprovalModal((current) =>
+                      current == null
+                        ? null
+                        : {
+                            ...current,
+                            approvalJustification: event.target.value,
+                            error: undefined,
+                          },
+                    )
+                  }
+                  placeholder="Document the exact evidence and why approval is still defensible."
+                />
+                <span style={{ color: '#64748b', fontSize: 13 }}>
+                  Minimum {MIN_APPROVAL_JUSTIFICATION_LENGTH} characters. State what was checked and why the mismatch is acceptable.
+                </span>
+              </label>
+              <div style={{ display: 'grid', gap: 10 }}>
+                <strong>Reviewer acknowledgment</strong>
+                {approvalModal.blockingMismatchFields.map((field) => (
+                  <label
+                    key={field}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      border: '1px solid #d8e3f5',
+                      background: '#f8fafc',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={approvalModal.mismatchAcknowledgements[field] ?? false}
+                      onChange={(event) =>
+                        setApprovalModal((current) =>
+                          current == null
+                            ? null
+                            : {
+                                ...current,
+                                mismatchAcknowledgements: {
+                                  ...current.mismatchAcknowledgements,
+                                  [field]: event.target.checked,
+                                },
+                                error: undefined,
+                              },
+                        )
+                      }
+                    />
+                    <span>
+                      I reviewed the blocking mismatch for <strong>{field}</strong> and accept responsibility for this approval decision.
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                <strong>Supersession diff acknowledgment</strong>
+                {approvalModal.supersessionFields.map((field) => (
+                  <label
+                    key={field}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      border: '1px solid #d8e3f5',
+                      background: '#f8fafc',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={approvalModal.supersessionAcknowledgements[field] ?? false}
+                      onChange={(event) =>
+                        setApprovalModal((current) =>
+                          current == null
+                            ? null
+                            : {
+                                ...current,
+                                supersessionAcknowledgements: {
+                                  ...current.supersessionAcknowledgements,
+                                  [field]: event.target.checked,
+                                },
+                                error: undefined,
+                              },
+                        )
+                      }
+                    />
+                    <span>
+                      I acknowledge that this approval supersedes the prior decision field
+                      <strong> {field}</strong>.
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {approvalModal.error ? (
+                <div
+                  style={{
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    background: '#fff7ed',
+                    border: '1px solid #f59e0b',
+                    color: '#9a3412',
+                  }}
+                >
+                  {approvalModal.error}
+                </div>
+              ) : null}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setApprovalModal(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void handleApproveWithModal()}
+                >
+                  Confirm approval
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </DashboardPage>
   );

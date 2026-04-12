@@ -6,6 +6,7 @@ export 'chat_conversation.dart';
 export 'chat_message.dart';
 export 'card_item.dart';
 export 'document_vault_item.dart';
+export 'fayda_extraction_result.dart';
 export 'identity_verification_result.dart';
 export 'login_challenge.dart';
 export 'loan_timeline_item.dart';

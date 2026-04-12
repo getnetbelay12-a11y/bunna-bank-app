@@ -275,6 +275,32 @@ export class FallbackAuthApi implements AuthApi {
       );
     }
   }
+
+  async verifyStaffStepUp(
+    payload: NonNullable<AuthApi['verifyStaffStepUp']> extends (
+      input: infer T,
+    ) => Promise<unknown>
+      ? T
+      : never,
+  ) {
+    if (!this.primary.verifyStaffStepUp) {
+      if (!this.fallback.verifyStaffStepUp) {
+        throw new Error('Step-up verification is not available.');
+      }
+
+      return this.fallback.verifyStaffStepUp(payload);
+    }
+
+    try {
+      return await this.primary.verifyStaffStepUp(payload);
+    } catch {
+      if (!this.fallback.verifyStaffStepUp) {
+        throw new Error('Step-up verification is not available.');
+      }
+
+      return this.fallback.verifyStaffStepUp(payload);
+    }
+  }
 }
 
 export class FallbackDashboardApi implements DashboardApi {
@@ -892,6 +918,87 @@ export class FallbackServiceRequestApi implements ServiceRequestApi {
       return await this.primary.getRequest(requestId);
     } catch {
       return this.fallback.getRequest(requestId);
+    }
+  }
+
+  async getSecurityReviewMetrics() {
+    if (!this.primary.getSecurityReviewMetrics || !this.fallback.getSecurityReviewMetrics) {
+      throw new Error('Security review metrics are unavailable in this client.');
+    }
+
+    try {
+      return await this.primary.getSecurityReviewMetrics();
+    } catch {
+      return this.fallback.getSecurityReviewMetrics();
+    }
+  }
+
+  async reportSecurityReviewMetricsContractIssue(payload: {
+    detectedContractVersion: string;
+    supportedContractVersion: string;
+    source: string;
+  }) {
+    if (
+      !this.primary.reportSecurityReviewMetricsContractIssue ||
+      !this.fallback.reportSecurityReviewMetricsContractIssue
+    ) {
+      throw new Error('Security review metrics contract reporting is unavailable in this client.');
+    }
+
+    try {
+      return await this.primary.reportSecurityReviewMetricsContractIssue(payload);
+    } catch {
+      return this.fallback.reportSecurityReviewMetricsContractIssue(payload);
+    }
+  }
+
+  async createSecurityReview(
+    payload: Parameters<NonNullable<ServiceRequestApi['createSecurityReview']>>[0],
+  ) {
+    if (!this.primary.createSecurityReview || !this.fallback.createSecurityReview) {
+      throw new Error('Security review creation is unavailable in this client.');
+    }
+
+    try {
+      return await this.primary.createSecurityReview(payload);
+    } catch {
+      return this.fallback.createSecurityReview(payload);
+    }
+  }
+
+  async assignToCurrentReviewer(requestId: string) {
+    if (!this.primary.assignToCurrentReviewer || !this.fallback.assignToCurrentReviewer) {
+      throw new Error('Security review assignment is unavailable in this client.');
+    }
+
+    try {
+      return await this.primary.assignToCurrentReviewer(requestId);
+    } catch {
+      return this.fallback.assignToCurrentReviewer(requestId);
+    }
+  }
+
+  async acknowledgeBreach(requestId: string) {
+    if (!this.primary.acknowledgeBreach || !this.fallback.acknowledgeBreach) {
+      throw new Error('Security review breach acknowledgment is unavailable in this client.');
+    }
+
+    try {
+      return await this.primary.acknowledgeBreach(requestId);
+    } catch {
+      return this.fallback.acknowledgeBreach(requestId);
+    }
+  }
+
+  async escalateStalled(requestId: string) {
+    if (!this.primary.escalateStalled || !this.fallback.escalateStalled) {
+      throw new Error('Security review stalled escalation is unavailable in this client.');
+    }
+
+    try {
+      return await this.primary.escalateStalled(requestId);
+    } catch {
+      return this.fallback.escalateStalled(requestId);
     }
   }
 
