@@ -7,4 +7,8 @@ export declare class CreateAuditLogDto {
     entityId: string;
     before?: Record<string, unknown> | null;
     after?: Record<string, unknown> | null;
+    decisionVersion?: number;
+    isCurrentDecision?: boolean;
+    supersedesAuditId?: string;
+    supersededByAuditId?: string;
 }

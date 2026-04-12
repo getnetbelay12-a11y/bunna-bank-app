@@ -1,8 +1,11 @@
 import { Model } from 'mongoose';
 import { AuthenticatedUser } from '../auth/interfaces';
 import { AuditService } from '../audit/audit.service';
+import { BranchDocument } from '../members/schemas/branch.schema';
+import { DistrictDocument } from '../members/schemas/district.schema';
 import { MemberDocument } from '../members/schemas/member.schema';
-import { NotificationDocument } from '../notifications/schemas/notification.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { MemberSecuritySettingDocument } from '../service-placeholders/schemas/member-security-setting.schema';
 import { CreateVoteOptionDto, CreateVoteDto, RespondToVoteDto } from './dto';
 import { VoteAdminListItem, VoteDetailResult, VoteOptionResult, VoteParticipationResult, VoteResultsBreakdown, VoteSummaryResult } from './interfaces';
 import { VoteOtpVerificationPort } from './vote-otp.port';
@@ -16,10 +19,13 @@ export declare class VotingService {
     private readonly voteResponseModel;
     private readonly voteAuditLogModel;
     private readonly memberModel;
-    private readonly notificationModel;
+    private readonly branchModel;
+    private readonly districtModel;
+    private readonly securityModel;
     private readonly voteOtpPort;
     private readonly auditService;
-    constructor(voteModel: Model<VoteDocument>, voteOptionModel: Model<VoteOptionDocument>, voteResponseModel: Model<VoteResponseDocument>, voteAuditLogModel: Model<VoteAuditLogDocument>, memberModel: Model<MemberDocument>, notificationModel: Model<NotificationDocument>, voteOtpPort: VoteOtpVerificationPort, auditService: AuditService);
+    private readonly notificationsService;
+    constructor(voteModel: Model<VoteDocument>, voteOptionModel: Model<VoteOptionDocument>, voteResponseModel: Model<VoteResponseDocument>, voteAuditLogModel: Model<VoteAuditLogDocument>, memberModel: Model<MemberDocument>, branchModel: Model<BranchDocument>, districtModel: Model<DistrictDocument>, securityModel: Model<MemberSecuritySettingDocument>, voteOtpPort: VoteOtpVerificationPort, auditService: AuditService, notificationsService: NotificationsService);
     getActiveVotes(): Promise<VoteSummaryResult[]>;
     getVote(voteId: string): Promise<VoteDetailResult>;
     respondToVote(currentUser: AuthenticatedUser, voteId: string, dto: RespondToVoteDto): Promise<{
@@ -28,7 +34,7 @@ export declare class VotingService {
         optionId: string;
         otpVerifiedAt: Date;
     }>;
-    getVoteResults(voteId: string): Promise<VoteResultsBreakdown[]>;
+    getVoteResults(currentUser: AuthenticatedUser, voteId: string): Promise<VoteResultsBreakdown[]>;
     listVotesForAdmin(currentUser: AuthenticatedUser): Promise<VoteAdminListItem[]>;
     createVote(currentUser: AuthenticatedUser, dto: CreateVoteDto): Promise<VoteSummaryResult>;
     addVoteOption(currentUser: AuthenticatedUser, voteId: string, dto: CreateVoteOptionDto): Promise<VoteOptionResult>;
@@ -39,7 +45,10 @@ export declare class VotingService {
     private ensureMemberAccess;
     private ensureAdminAccess;
     private ensureShareholder;
+    private ensureEligibleVotingMember;
+    private ensureVotingAllowed;
     private ensureVoteIsOpen;
+    private validateVoteSchedule;
     private toVoteSummary;
     private toVoteOption;
 }

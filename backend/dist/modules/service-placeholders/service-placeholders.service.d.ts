@@ -1,5 +1,8 @@
 import { Model } from 'mongoose';
 import { AuthenticatedUser } from '../auth/interfaces';
+import { AuditService } from '../audit/audit.service';
+import { MemberDocument } from '../members/schemas/member.schema';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateAtmCardRequestDto } from './dto/create-atm-card-request.dto';
 import { CreateAutopayDto } from './dto/create-autopay.dto';
@@ -15,12 +18,15 @@ import { PhoneUpdateRequestDocument } from './schemas/phone-update-request.schem
 import { SelfieVerificationDocument } from './schemas/selfie-verification.schema';
 export declare class ServicePlaceholdersService {
     private readonly autopayModel;
+    private readonly memberModel;
     private readonly securityModel;
     private readonly atmCardRequestModel;
     private readonly phoneUpdateRequestModel;
     private readonly accountMemberRequestModel;
     private readonly selfieVerificationModel;
-    constructor(autopayModel: Model<AutopaySettingDocument>, securityModel: Model<MemberSecuritySettingDocument>, atmCardRequestModel: Model<AtmCardRequestDocument>, phoneUpdateRequestModel: Model<PhoneUpdateRequestDocument>, accountMemberRequestModel: Model<AccountMemberRequestDocument>, selfieVerificationModel: Model<SelfieVerificationDocument>);
+    private readonly auditService;
+    private readonly notificationsService;
+    constructor(autopayModel: Model<AutopaySettingDocument>, memberModel: Model<MemberDocument>, securityModel: Model<MemberSecuritySettingDocument>, atmCardRequestModel: Model<AtmCardRequestDocument>, phoneUpdateRequestModel: Model<PhoneUpdateRequestDocument>, accountMemberRequestModel: Model<AccountMemberRequestDocument>, selfieVerificationModel: Model<SelfieVerificationDocument>, auditService: AuditService, notificationsService: NotificationsService);
     createAutopay(currentUser: AuthenticatedUser, dto: CreateAutopayDto): Promise<{
         feature: string;
         status: string;
@@ -98,4 +104,8 @@ export declare class ServicePlaceholdersService {
     }>;
     private toAutopayItem;
     private toObjectId;
+    private loadEligibleMember;
+    private ensureProfileMatchesMember;
+    private ensureStrongCardPin;
+    private hashSecret;
 }

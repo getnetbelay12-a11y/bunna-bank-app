@@ -35,6 +35,15 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         required: true,
+        enum: enums_1.NotificationChannel,
+        index: true,
+        default: enums_1.NotificationChannel.MOBILE_PUSH,
+    }),
+    __metadata("design:type", String)
+], Notification.prototype, "channel", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        required: true,
         enum: enums_1.NotificationStatus,
         index: true,
     }),
@@ -57,9 +66,29 @@ __decorate([
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Notification.prototype, "entityId", void 0);
 __decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Notification.prototype, "actionLabel", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true, index: true }),
+    __metadata("design:type", String)
+], Notification.prototype, "priority", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Notification.prototype, "deepLink", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object }),
+    __metadata("design:type", Object)
+], Notification.prototype, "dataPayload", void 0);
+__decorate([
     (0, mongoose_1.Prop)(),
     __metadata("design:type", Date)
 ], Notification.prototype, "readAt", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", Date)
+], Notification.prototype, "deliveredAt", void 0);
 exports.Notification = Notification = __decorate([
     (0, mongoose_1.Schema)({ collection: 'notifications', timestamps: true, versionKey: false })
 ], Notification);

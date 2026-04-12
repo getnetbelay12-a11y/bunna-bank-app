@@ -12,6 +12,7 @@ export declare class MembersService {
     getMyProfile(currentUser: AuthenticatedUser): Promise<MemberProfile>;
     updateMyProfile(currentUser: AuthenticatedUser, dto: UpdateMyProfileDto): Promise<MemberProfile>;
     getMemberById(currentUser: AuthenticatedUser, memberId: string): Promise<MemberProfile>;
+    findMemberByCustomerId(customerId: string): Promise<MemberProfile | null>;
     createMember(currentUser: AuthenticatedUser, dto: CreateMemberDto): Promise<MemberProfile>;
     listMembers(currentUser: AuthenticatedUser, query: ListMembersQueryDto): Promise<MemberListResult>;
     private ensureMemberPrincipal;

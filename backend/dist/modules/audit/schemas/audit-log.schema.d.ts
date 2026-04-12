@@ -9,6 +9,11 @@ export declare class AuditLog {
     entityId: Types.ObjectId;
     before?: Record<string, unknown> | null;
     after?: Record<string, unknown> | null;
+    auditDigest: string;
+    decisionVersion?: number;
+    isCurrentDecision?: boolean;
+    supersedesAuditId?: Types.ObjectId;
+    supersededByAuditId?: Types.ObjectId;
     createdAt?: Date;
     updatedAt?: Date;
 }

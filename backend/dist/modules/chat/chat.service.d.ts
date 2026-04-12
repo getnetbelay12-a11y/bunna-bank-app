@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateChatConversationDto, CreateChatMessageDto } from './dto';
 import { ChatConversationDetailResult, ChatConversationResult } from './interfaces';
+import { LoanDocument } from '../loans/schemas/loan.schema';
 import { ChatAssignmentDocument } from './schemas/chat-assignment.schema';
 import { ChatConversationDocument } from './schemas/chat-conversation.schema';
 import { ChatMessageDocument } from './schemas/chat-message.schema';
@@ -11,13 +12,14 @@ import { ChatParticipantDocument } from './schemas/chat-participant.schema';
 import { ChatStatusLogDocument } from './schemas/chat-status-log.schema';
 export declare class ChatService {
     private readonly conversationModel;
+    private readonly loanModel;
     private readonly messageModel;
     private readonly participantModel;
     private readonly assignmentModel;
     private readonly statusLogModel;
     private readonly notificationsService;
     private readonly auditService;
-    constructor(conversationModel: Model<ChatConversationDocument>, messageModel: Model<ChatMessageDocument>, participantModel: Model<ChatParticipantDocument>, assignmentModel: Model<ChatAssignmentDocument>, statusLogModel: Model<ChatStatusLogDocument>, notificationsService: NotificationsService, auditService: AuditService);
+    constructor(conversationModel: Model<ChatConversationDocument>, loanModel: Model<LoanDocument>, messageModel: Model<ChatMessageDocument>, participantModel: Model<ChatParticipantDocument>, assignmentModel: Model<ChatAssignmentDocument>, statusLogModel: Model<ChatStatusLogDocument>, notificationsService: NotificationsService, auditService: AuditService);
     createConversation(currentUser: AuthenticatedUser, dto: CreateChatConversationDto): Promise<ChatConversationDetailResult>;
     listMyConversations(currentUser: AuthenticatedUser): Promise<ChatConversationResult[]>;
     getMyConversation(currentUser: AuthenticatedUser, conversationId: string): Promise<ChatConversationDetailResult>;
@@ -43,6 +45,9 @@ export declare class ChatService {
     private logStatusChange;
     private logAudit;
     private resolvePriority;
+    private resolveResponseDueAt;
+    private resolveSlaState;
     private assertSupportConversationAccess;
     private buildSupportConversationScope;
+    private resolveLoanRouting;
 }

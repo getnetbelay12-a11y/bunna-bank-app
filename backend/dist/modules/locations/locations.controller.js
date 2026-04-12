@@ -24,7 +24,7 @@ let LocationsController = class LocationsController {
         return this.locationsService.getRegions();
     }
     getCities(region) {
-        return this.locationsService.getCities(region ?? 'Amhara');
+        return this.locationsService.getCities(region ?? 'National');
     }
     getBranches(region, city) {
         return this.locationsService.getBranches(region, city);

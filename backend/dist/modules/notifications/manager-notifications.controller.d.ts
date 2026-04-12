@@ -69,17 +69,33 @@ export declare class ManagerNotificationsController {
     } & Required<{
         _id: import("mongoose").Types.ObjectId;
     }>>;
-    sendCampaign(currentUser: AuthenticatedUser, campaignId: string): Promise<import("mongoose").Document<unknown, {}, import("mongoose").Document<unknown, {}, import("./schemas/notification-campaign.schema").NotificationCampaign, {}, {}> & import("./schemas/notification-campaign.schema").NotificationCampaign & {
+    sendCampaign(currentUser: AuthenticatedUser, campaignId: string): Promise<import("mongoose").Document<unknown, {}, import("./schemas/notification-campaign.schema").NotificationCampaign, {}, {}> & import("./schemas/notification-campaign.schema").NotificationCampaign & {
         _id: import("mongoose").Types.ObjectId;
     } & {
         __v: number;
-    }, {}, {}> & import("mongoose").Document<unknown, {}, import("./schemas/notification-campaign.schema").NotificationCampaign, {}, {}> & import("./schemas/notification-campaign.schema").NotificationCampaign & {
-        _id: import("mongoose").Types.ObjectId;
     } & {
-        __v: number;
-    } & Required<{
-        _id: import("mongoose").Types.ObjectId;
-    }>>;
+        deliverySummary: {
+            totalTargets: number;
+            totalChannels: number;
+            totalAttempts: number;
+            channels: Record<string, {
+                sent: number;
+                delivered: number;
+                failed: number;
+                skipped: number;
+            }>;
+            perRecipientResults: Array<{
+                customerId: string;
+                memberId: string;
+                channels: Record<string, {
+                    status: "sent" | "delivered" | "failed" | "skipped";
+                    recipient?: string;
+                    providerMessageId?: string;
+                    errorMessage?: string;
+                }>;
+            }>;
+        };
+    }>;
     listLogs(currentUser: AuthenticatedUser): Promise<(import("mongoose").Document<unknown, {}, import("./schemas/notification-log.schema").NotificationLog, {}, {}> & import("./schemas/notification-log.schema").NotificationLog & {
         _id: import("mongoose").Types.ObjectId;
     } & {

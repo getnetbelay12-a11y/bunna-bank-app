@@ -13,6 +13,7 @@ export declare class Loan {
     status: LoanStatus;
     currentLevel: LoanWorkflowLevel;
     assignedToStaffId?: Types.ObjectId;
+    deficiencyReasons: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }

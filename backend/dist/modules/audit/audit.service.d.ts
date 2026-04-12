@@ -1,13 +1,51 @@
+import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
-import { CreateAuditLogDto, ListAuditLogsQueryDto } from './dto';
+import { UserRole } from '../../common/enums';
+import { CreateAuditLogDto, ListAuditLogsQueryDto, ListOnboardingReviewAuditQueryDto } from './dto';
 import { AuditLogResult } from './interfaces';
 import { AuditLogDocument } from './schemas/audit-log.schema';
+import { MemberDocument } from '../members/schemas/member.schema';
+import { StaffDocument } from '../staff/schemas/staff.schema';
 export declare class AuditService {
     private readonly auditLogModel;
-    constructor(auditLogModel: Model<AuditLogDocument>);
+    private readonly staffModel;
+    private readonly memberModel;
+    private readonly configService;
+    constructor(auditLogModel: Model<AuditLogDocument>, staffModel: Model<StaffDocument>, memberModel: Model<MemberDocument>, configService: ConfigService);
     log(dto: CreateAuditLogDto): Promise<AuditLogResult>;
+    logOnboardingReviewDecision(input: {
+        actorId: string;
+        actorRole: UserRole;
+        entityId: string;
+        before?: Record<string, unknown> | null;
+        after?: Record<string, unknown> | null;
+        supersessionReasonCode?: string;
+        acknowledgedSupersessionFields?: string[];
+    }): Promise<AuditLogResult>;
+    getCurrentOnboardingReviewDecision(memberId: string): Promise<AuditLogResult | null>;
+    logActorAction(input: {
+        actorId: string;
+        actorRole: UserRole;
+        actionType: string;
+        entityType: string;
+        entityId: string;
+        before?: Record<string, unknown> | null;
+        after?: Record<string, unknown> | null;
+    }): Promise<AuditLogResult>;
     listByEntity(entityType: string, entityId: string): Promise<AuditLogResult[]>;
     listByActor(actorId: string): Promise<AuditLogResult[]>;
+    verifyAuditLog(auditId: string): Promise<import('./interfaces').AuditLogVerificationResult>;
     list(query: ListAuditLogsQueryDto): Promise<AuditLogResult[]>;
+    listOnboardingReviewDecisions(query: ListOnboardingReviewAuditQueryDto): Promise<AuditLogResult[]>;
+    exportOnboardingReviewDecisionsCsv(query: ListOnboardingReviewAuditQueryDto): Promise<string>;
     private toResult;
+    private computeAuditDigest;
+    private stableStringify;
+    private sortValue;
+    private asRecord;
+    private asString;
+    private asStringArray;
+    private escapeCsvValue;
+    private buildDecisionDiff;
+    private flattenDecisionValue;
 }

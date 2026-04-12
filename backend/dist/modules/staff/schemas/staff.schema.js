@@ -40,6 +40,7 @@ __decorate([
     (0, mongoose_1.Prop)({
         required: true,
         enum: [
+            enums_1.UserRole.SCHOOL_ADMIN,
             enums_1.UserRole.SUPPORT_AGENT,
             enums_1.UserRole.LOAN_OFFICER,
             enums_1.UserRole.BRANCH_MANAGER,
@@ -61,6 +62,10 @@ __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'District', index: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Staff.prototype, "districtId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: [String], default: [] }),
+    __metadata("design:type", Array)
+], Staff.prototype, "permissions", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ required: true }),
     __metadata("design:type", String)

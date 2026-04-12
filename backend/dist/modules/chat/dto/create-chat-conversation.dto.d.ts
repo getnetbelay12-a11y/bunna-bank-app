@@ -7,5 +7,6 @@ export declare enum ChatIssueCategory {
 }
 export declare class CreateChatConversationDto {
     issueCategory: ChatIssueCategory;
+    loanId?: string;
     initialMessage?: string;
 }

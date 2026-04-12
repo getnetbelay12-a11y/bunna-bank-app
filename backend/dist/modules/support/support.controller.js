@@ -105,7 +105,7 @@ __decorate([
 ], SupportController.prototype, "updateStatus", null);
 exports.SupportController = SupportController = __decorate([
     (0, common_1.UseGuards)(guards_1.JwtAuthGuard, guards_1.RolesGuard),
-    (0, decorators_1.Roles)(enums_1.UserRole.SUPPORT_AGENT, enums_1.UserRole.ADMIN, enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.BRANCH_MANAGER),
+    (0, decorators_1.Roles)(enums_1.UserRole.SUPPORT_AGENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DISTRICT_OFFICER, enums_1.UserRole.DISTRICT_MANAGER, enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.BRANCH_MANAGER),
     (0, common_1.Controller)('support/console/chats'),
     __metadata("design:paramtypes", [chat_service_1.ChatService])
 ], SupportController);

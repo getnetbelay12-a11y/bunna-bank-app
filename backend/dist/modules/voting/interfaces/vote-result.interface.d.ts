@@ -24,11 +24,22 @@ export interface VoteResultsBreakdown {
     votes: number;
     percentage: number;
 }
+export interface VoteParticipationBreakdownItem {
+    id: string;
+    name: string;
+    totalResponses: number;
+}
 export interface VoteParticipationResult {
     totalResponses: number;
     uniqueBranches: number;
+    uniqueDistricts: number;
+    eligibleShareholders: number;
+    participationRate: number;
+    branchParticipation: VoteParticipationBreakdownItem[];
+    districtParticipation: VoteParticipationBreakdownItem[];
 }
 export interface VoteAdminListItem extends VoteSummaryResult {
     totalResponses: number;
     participationRate: number;
+    eligibleShareholders: number;
 }

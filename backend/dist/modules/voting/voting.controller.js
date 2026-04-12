@@ -38,8 +38,20 @@ let VotingController = class VotingController {
     castVote(currentUser, dto) {
         return this.votingService.respondToVote(currentUser, dto.voteId, dto);
     }
-    getVoteResults(voteId) {
-        return this.votingService.getVoteResults(voteId);
+    getVoteResults(currentUser, voteId) {
+        return this.votingService.getVoteResults(currentUser, voteId);
+    }
+    createVoteAlias(currentUser, dto) {
+        return this.votingService.createVote(currentUser, dto);
+    }
+    openVoteAlias(currentUser, voteId) {
+        return this.votingService.openVote(currentUser, voteId);
+    }
+    closeVoteAlias(currentUser, voteId) {
+        return this.votingService.closeVote(currentUser, voteId);
+    }
+    getParticipationAlias(currentUser, voteId) {
+        return this.votingService.getParticipation(currentUser, voteId);
     }
     listVotesForAdmin(currentUser) {
         return this.votingService.listVotesForAdmin(currentUser);
@@ -99,11 +111,48 @@ __decorate([
 ], VotingController.prototype, "castVote", null);
 __decorate([
     (0, common_1.Get)('votes/:id/results'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], VotingController.prototype, "getVoteResults", null);
+__decorate([
+    (0, decorators_1.Roles)(enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
+    (0, common_1.Post)('votes'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, dto_1.CreateVoteDto]),
+    __metadata("design:returntype", void 0)
+], VotingController.prototype, "createVoteAlias", null);
+__decorate([
+    (0, decorators_1.Roles)(enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
+    (0, common_1.Post)('votes/:id/open'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], VotingController.prototype, "openVoteAlias", null);
+__decorate([
+    (0, decorators_1.Roles)(enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
+    (0, common_1.Post)('votes/:id/close'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], VotingController.prototype, "closeVoteAlias", null);
+__decorate([
+    (0, decorators_1.Roles)(enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
+    (0, common_1.Get)('votes/:id/participation'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], VotingController.prototype, "getParticipationAlias", null);
 __decorate([
     (0, decorators_1.Roles)(enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
     (0, common_1.Get)('admin/votes'),

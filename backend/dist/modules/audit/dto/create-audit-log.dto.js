@@ -45,4 +45,22 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], CreateAuditLogDto.prototype, "after", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreateAuditLogDto.prototype, "decisionVersion", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], CreateAuditLogDto.prototype, "isCurrentDecision", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsMongoId)(),
+    __metadata("design:type", String)
+], CreateAuditLogDto.prototype, "supersedesAuditId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsMongoId)(),
+    __metadata("design:type", String)
+], CreateAuditLogDto.prototype, "supersededByAuditId", void 0);
 //# sourceMappingURL=create-audit-log.dto.js.map

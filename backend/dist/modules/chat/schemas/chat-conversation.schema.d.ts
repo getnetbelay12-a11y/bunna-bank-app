@@ -13,6 +13,8 @@ export declare class ChatConversation {
     districtName?: string;
     assignedToStaffId?: Types.ObjectId;
     assignedToStaffName?: string;
+    loanId?: Types.ObjectId;
+    routingLevel: 'general' | 'branch' | 'district' | 'head_office';
     status: 'open' | 'assigned' | 'waiting_customer' | 'waiting_agent' | 'resolved' | 'closed';
     channel: 'mobile';
     category: ChatIssueCategory;

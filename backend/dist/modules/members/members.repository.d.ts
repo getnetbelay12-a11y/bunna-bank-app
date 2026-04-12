@@ -6,6 +6,7 @@ export declare class MembersRepository {
     private readonly memberModel;
     constructor(memberModel: Model<MemberDocument>);
     findById(id: string): Promise<MemberProfile | null>;
+    findByCustomerId(customerId: string): Promise<MemberProfile | null>;
     updateById(id: string, dto: UpdateMyProfileDto): Promise<MemberProfile>;
     create(dto: CreateMemberDto): Promise<MemberProfile>;
     list(query: ListMembersQueryDto): Promise<MemberListResult>;

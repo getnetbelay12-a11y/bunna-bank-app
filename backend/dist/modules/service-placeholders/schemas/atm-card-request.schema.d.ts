@@ -11,7 +11,7 @@ export declare class AtmCardRequest {
     faydaFrontImageUrl: string;
     faydaBackImageUrl: string;
     selfieImageUrl?: string;
-    pin: string;
+    pinHash: string;
     status: string;
 }
 export declare const AtmCardRequestSchema: import("mongoose").Schema<AtmCardRequest, import("mongoose").Model<AtmCardRequest, any, any, any, import("mongoose").Document<unknown, any, AtmCardRequest, any, {}> & AtmCardRequest & {

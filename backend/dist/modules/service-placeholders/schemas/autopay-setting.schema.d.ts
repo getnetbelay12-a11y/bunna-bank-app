@@ -6,6 +6,8 @@ export declare class AutopaySetting {
     accountId: string;
     schedule: string;
     enabled: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 export declare const AutopaySettingSchema: import("mongoose").Schema<AutopaySetting, import("mongoose").Model<AutopaySetting, any, any, any, import("mongoose").Document<unknown, any, AutopaySetting, any, {}> & AutopaySetting & {
     _id: Types.ObjectId;

@@ -20,6 +20,12 @@ __decorate([
     __metadata("design:type", String)
 ], VerifyOtpDto.prototype, "phoneNumber", void 0);
 __decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(32),
+    __metadata("design:type", String)
+], VerifyOtpDto.prototype, "phone", void 0);
+__decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(4),
     (0, class_validator_1.MaxLength)(8),

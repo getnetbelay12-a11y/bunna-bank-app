@@ -3,6 +3,9 @@ node_modules/
 dist/
 build/
 coverage/
+.backup/
+*.backup
+*.pre_*.json
 .env
 .env.*
 .DS_Store

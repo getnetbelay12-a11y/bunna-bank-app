@@ -10,14 +10,15 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
+const schedule_1 = require("@nestjs/schedule");
 const health_controller_1 = require("./health.controller");
 const app_config_1 = require("./config/app.config");
 const auth_config_1 = require("./config/auth.config");
 const database_config_1 = require("./config/database.config");
 const environment_validation_1 = require("./config/environment.validation");
-const external_mail_env_1 = require("./config/external-mail-env");
 const logging_config_1 = require("./config/logging.config");
 const notifications_config_1 = require("./config/notifications.config");
+const onboarding_config_1 = require("./config/onboarding.config");
 const storage_config_1 = require("./config/storage.config");
 const audit_module_1 = require("./modules/audit/audit.module");
 const auth_module_1 = require("./modules/auth/auth.module");
@@ -32,15 +33,29 @@ const members_module_1 = require("./modules/members/members.module");
 const notifications_module_1 = require("./modules/notifications/notifications.module");
 const payments_module_1 = require("./modules/payments/payments.module");
 const reports_module_1 = require("./modules/reports/reports.module");
+const recommendations_module_1 = require("./modules/recommendations/recommendations.module");
 const savings_module_1 = require("./modules/savings/savings.module");
 const service_placeholders_module_1 = require("./modules/service-placeholders/service-placeholders.module");
+const service_requests_module_1 = require("./modules/service-requests/service-requests.module");
 const shareholders_module_1 = require("./modules/shareholders/shareholders.module");
+const guardians_module_1 = require("./modules/guardians/guardians.module");
+const guardian_student_links_module_1 = require("./modules/guardian-student-links/guardian-student-links.module");
+const school_payments_module_1 = require("./modules/school-payments/school-payments.module");
+const school_reports_module_1 = require("./modules/school-reports/school-reports.module");
 const staff_module_1 = require("./modules/staff/staff.module");
 const staff_activity_module_1 = require("./modules/staff-activity/staff-activity.module");
+const students_module_1 = require("./modules/students/students.module");
 const support_module_1 = require("./modules/support/support.module");
 const voting_module_1 = require("./modules/voting/voting.module");
 const chat_module_1 = require("./modules/chat/chat.module");
-(0, external_mail_env_1.loadExternalMailEnvironment)();
+const card_management_module_1 = require("./modules/card-management/card-management.module");
+const demo_module_1 = require("./modules/demo/demo.module");
+const uploads_module_1 = require("./modules/uploads/uploads.module");
+const insights_module_1 = require("./modules/insights/insights.module");
+const enrollments_module_1 = require("./modules/enrollments/enrollments.module");
+const institutions_module_1 = require("./modules/institutions/institutions.module");
+const fee_plans_module_1 = require("./modules/fee-plans/fee-plans.module");
+const invoices_module_1 = require("./modules/invoices/invoices.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -60,6 +75,7 @@ exports.AppModule = AppModule = __decorate([
                     auth_config_1.authConfig,
                     database_config_1.databaseConfig,
                     notifications_config_1.notificationsConfig,
+                    onboarding_config_1.onboardingConfig,
                     storage_config_1.storageConfig,
                     logging_config_1.loggingConfig,
                 ],
@@ -75,6 +91,7 @@ exports.AppModule = AppModule = __decorate([
                     };
                 },
             }),
+            schedule_1.ScheduleModule.forRoot(),
             auth_module_1.AuthModule,
             audit_module_1.AuditModule,
             member_profiles_module_1.MemberProfilesModule,
@@ -88,7 +105,19 @@ exports.AppModule = AppModule = __decorate([
             notifications_module_1.NotificationsModule,
             chat_module_1.ChatModule,
             support_module_1.SupportModule,
+            recommendations_module_1.RecommendationsModule,
+            card_management_module_1.CardManagementModule,
             service_placeholders_module_1.ServicePlaceholdersModule,
+            service_requests_module_1.ServiceRequestsModule,
+            institutions_module_1.InstitutionsModule,
+            students_module_1.StudentsModule,
+            guardians_module_1.GuardiansModule,
+            guardian_student_links_module_1.GuardianStudentLinksModule,
+            enrollments_module_1.EnrollmentsModule,
+            fee_plans_module_1.FeePlansModule,
+            invoices_module_1.InvoicesModule,
+            school_payments_module_1.SchoolPaymentsModule,
+            school_reports_module_1.SchoolReportsModule,
             savings_module_1.SavingsModule,
             shareholders_module_1.ShareholdersModule,
             staff_module_1.StaffModule,
@@ -96,6 +125,9 @@ exports.AppModule = AppModule = __decorate([
             staff_activity_module_1.StaffActivityModule,
             dashboard_module_1.DashboardModule,
             reports_module_1.ReportsModule,
+            uploads_module_1.UploadsModule,
+            insights_module_1.InsightsModule,
+            demo_module_1.DemoModule,
         ],
         controllers: [health_controller_1.HealthController],
     })

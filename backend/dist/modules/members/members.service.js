@@ -32,6 +32,8 @@ let MembersService = class MembersService {
             ...member,
             membershipStatus: profile?.membershipStatus ?? 'pending_verification',
             identityVerificationStatus: profile?.identityVerificationStatus ?? 'not_started',
+            onboardingReviewStatus: profile?.onboardingReviewStatus ?? 'submitted',
+            onboardingReviewNote: profile?.onboardingReviewNote,
         };
     }
     async updateMyProfile(currentUser, dto) {
@@ -63,6 +65,8 @@ let MembersService = class MembersService {
             ...updated,
             membershipStatus: profile?.membershipStatus ?? 'pending_verification',
             identityVerificationStatus: profile?.identityVerificationStatus ?? 'not_started',
+            onboardingReviewStatus: profile?.onboardingReviewStatus ?? 'submitted',
+            onboardingReviewNote: profile?.onboardingReviewNote,
         };
     }
     async getMemberById(currentUser, memberId) {
@@ -72,6 +76,9 @@ let MembersService = class MembersService {
             throw new common_1.NotFoundException('Member not found.');
         }
         return member;
+    }
+    async findMemberByCustomerId(customerId) {
+        return this.membersRepository.findByCustomerId(customerId);
     }
     async createMember(currentUser, dto) {
         this.ensureStaffAccess(currentUser);

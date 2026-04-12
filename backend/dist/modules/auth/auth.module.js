@@ -18,7 +18,9 @@ const branch_schema_1 = require("../members/schemas/branch.schema");
 const district_schema_1 = require("../members/schemas/district.schema");
 const member_schema_1 = require("../members/schemas/member.schema");
 const notifications_module_1 = require("../notifications/notifications.module");
+const member_security_setting_schema_1 = require("../service-placeholders/schemas/member-security-setting.schema");
 const staff_schema_1 = require("../staff/schemas/staff.schema");
+const auth_security_service_1 = require("./auth-security.service");
 const auth_constants_1 = require("./auth.constants");
 const auth_controller_1 = require("./auth.controller");
 const auth_service_1 = require("./auth.service");
@@ -26,6 +28,8 @@ const member_auth_repository_1 = require("./repositories/member-auth.repository"
 const staff_auth_repository_1 = require("./repositories/staff-auth.repository");
 const auth_session_schema_1 = require("./schemas/auth-session.schema");
 const device_schema_1 = require("./schemas/device.schema");
+const onboarding_evidence_schema_1 = require("./schemas/onboarding-evidence.schema");
+const staff_step_up_token_schema_1 = require("./schemas/staff-step-up-token.schema");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 let AuthModule = class AuthModule {
 };
@@ -44,6 +48,9 @@ exports.AuthModule = AuthModule = __decorate([
                 { name: district_schema_1.District.name, schema: district_schema_1.DistrictSchema },
                 { name: auth_session_schema_1.AuthSession.name, schema: auth_session_schema_1.AuthSessionSchema },
                 { name: device_schema_1.Device.name, schema: device_schema_1.DeviceSchema },
+                { name: onboarding_evidence_schema_1.OnboardingEvidence.name, schema: onboarding_evidence_schema_1.OnboardingEvidenceSchema },
+                { name: staff_step_up_token_schema_1.StaffStepUpToken.name, schema: staff_step_up_token_schema_1.StaffStepUpTokenSchema },
+                { name: member_security_setting_schema_1.MemberSecuritySetting.name, schema: member_security_setting_schema_1.MemberSecuritySettingSchema },
             ]),
             jwt_1.JwtModule.registerAsync({
                 inject: [config_1.ConfigService],
@@ -62,6 +69,7 @@ exports.AuthModule = AuthModule = __decorate([
         controllers: [auth_controller_1.AuthController],
         providers: [
             auth_service_1.AuthService,
+            auth_security_service_1.AuthSecurityService,
             jwt_strategy_1.JwtStrategy,
             member_auth_repository_1.MongooseMemberAuthRepository,
             staff_auth_repository_1.MongooseStaffAuthRepository,
@@ -74,7 +82,7 @@ exports.AuthModule = AuthModule = __decorate([
                 useExisting: staff_auth_repository_1.MongooseStaffAuthRepository,
             },
         ],
-        exports: [auth_service_1.AuthService],
+        exports: [auth_service_1.AuthService, auth_security_service_1.AuthSecurityService],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

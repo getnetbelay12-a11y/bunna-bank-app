@@ -94,4 +94,5 @@ export declare class IdentityVerificationService {
     }>;
     private resolveIntegrationMode;
     private toResult;
+    private maskFaydaFin;
 }

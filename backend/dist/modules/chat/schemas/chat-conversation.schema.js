@@ -13,6 +13,7 @@ exports.ChatConversationSchema = exports.ChatConversation = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const enums_1 = require("../../../common/enums");
+const loan_schema_1 = require("../../loans/schemas/loan.schema");
 const dto_1 = require("../dto");
 let ChatConversation = class ChatConversation {
 };
@@ -57,6 +58,19 @@ __decorate([
     (0, mongoose_1.Prop)({ trim: true }),
     __metadata("design:type", String)
 ], ChatConversation.prototype, "assignedToStaffName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: loan_schema_1.Loan.name, index: true }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], ChatConversation.prototype, "loanId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        required: true,
+        enum: ['general', 'branch', 'district', 'head_office'],
+        default: 'general',
+        index: true,
+    }),
+    __metadata("design:type", String)
+], ChatConversation.prototype, "routingLevel", void 0);
 __decorate([
     (0, mongoose_1.Prop)({
         required: true,
@@ -105,5 +119,11 @@ exports.ChatConversationSchema.index({
     status: 1,
     assignedToStaffId: 1,
     lastMessageAt: -1,
+});
+exports.ChatConversationSchema.index({
+    memberId: 1,
+    loanId: 1,
+    routingLevel: 1,
+    status: 1,
 });
 //# sourceMappingURL=chat-conversation.schema.js.map

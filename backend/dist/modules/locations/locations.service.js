@@ -17,7 +17,7 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const branch_schema_1 = require("../members/schemas/branch.schema");
-const DEFAULT_REGION = 'Amhara';
+const DEFAULT_REGION = 'National';
 let LocationsService = class LocationsService {
     constructor(branchModel) {
         this.branchModel = branchModel;

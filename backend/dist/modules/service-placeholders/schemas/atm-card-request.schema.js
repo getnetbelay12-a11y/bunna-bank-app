@@ -58,7 +58,7 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({ required: true, trim: true }),
     __metadata("design:type", String)
-], AtmCardRequest.prototype, "pin", void 0);
+], AtmCardRequest.prototype, "pinHash", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ default: 'submitted', index: true }),
     __metadata("design:type", String)

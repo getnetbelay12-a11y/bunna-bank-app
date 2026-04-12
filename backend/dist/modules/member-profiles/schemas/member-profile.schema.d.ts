@@ -7,6 +7,10 @@ export declare class MemberProfileEntity {
     districtId: Types.ObjectId;
     membershipStatus: string;
     identityVerificationStatus: string;
+    onboardingReviewStatus: string;
+    onboardingReviewNote?: string;
+    onboardingReviewedBy?: string;
+    onboardingLastReviewedAt?: Date;
     consentAccepted: boolean;
     createdAt?: Date;
     updatedAt?: Date;

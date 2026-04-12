@@ -1,7 +1,9 @@
+import { FaydaExtractionDto } from './fayda-extraction.dto';
 export declare class RegisterMemberDto {
     firstName: string;
     lastName: string;
     phoneNumber: string;
+    phone?: string;
     email?: string;
     dateOfBirth?: string;
     region?: string;
@@ -16,4 +18,5 @@ export declare class RegisterMemberDto {
     faydaFrontImage?: string;
     faydaBackImage?: string;
     consentAccepted?: boolean;
+    extractedFaydaData?: FaydaExtractionDto;
 }

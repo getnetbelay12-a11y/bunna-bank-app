@@ -2,10 +2,10 @@ import { OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Model } from 'mongoose';
-import { MemberType, UserRole } from '../../common/enums';
+import { MemberType, NotificationChannel, UserRole } from '../../common/enums';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser } from './interfaces';
-import { CheckExistingAccountDto, MemberLoginDto, RefreshTokenDto, RegisterMemberDto, RequestOtpDto, StartLoginDto, StaffLoginDto, VerifyPinLoginDto, VerifyOtpDto } from './dto';
+import { CheckExistingAccountDto, LookupOnboardingStatusDto, MemberLoginDto, RefreshTokenDto, RecoveryOptionsDto, RegisterMemberDto, RequestOtpDto, ResetPinDto, StartLoginDto, StaffLoginDto, VerifyStaffStepUpDto, VerifyPinLoginDto, VerifyOtpDto } from './dto';
 import { AuthTokens, CheckExistingAccountResult, LoginResult, MemberAuthRepository, StartLoginResult, StaffAuthRepository } from './auth.types';
 import { BranchDocument } from '../members/schemas/branch.schema';
 import { DistrictDocument } from '../members/schemas/district.schema';
@@ -13,8 +13,12 @@ import { MemberDocument } from '../members/schemas/member.schema';
 import { MemberProfilesService } from '../member-profiles/member-profiles.service';
 import { IdentityVerificationService } from '../identity-verification/identity-verification.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailNotificationProvider } from '../notifications/providers/email-notification.provider';
+import { SmsNotificationProvider } from '../notifications/providers/sms-notification.provider';
 import { AuthSessionDocument } from './schemas/auth-session.schema';
 import { DeviceDocument } from './schemas/device.schema';
+import { OnboardingEvidenceDocument } from './schemas/onboarding-evidence.schema';
+import { StaffStepUpTokenDocument } from './schemas/staff-step-up-token.schema';
 export declare class AuthService implements OnModuleInit {
     private readonly configService;
     private readonly jwtService;
@@ -25,23 +29,52 @@ export declare class AuthService implements OnModuleInit {
     private readonly districtModel;
     private readonly authSessionModel;
     private readonly deviceModel;
+    private readonly onboardingEvidenceModel;
+    private readonly staffStepUpTokenModel;
     private readonly memberProfilesService;
     private readonly identityVerificationService;
     private readonly notificationsService;
+    private readonly emailNotificationProvider;
+    private readonly smsNotificationProvider;
     private readonly auditService;
     private readonly logger;
-    constructor(configService: ConfigService, jwtService: JwtService, memberAuthRepository: MemberAuthRepository, staffAuthRepository: StaffAuthRepository, memberModel: Model<MemberDocument>, branchModel: Model<BranchDocument>, districtModel: Model<DistrictDocument>, authSessionModel: Model<AuthSessionDocument>, deviceModel: Model<DeviceDocument>, memberProfilesService: MemberProfilesService, identityVerificationService: IdentityVerificationService, notificationsService: NotificationsService, auditService: AuditService);
+    constructor(configService: ConfigService, jwtService: JwtService, memberAuthRepository: MemberAuthRepository, staffAuthRepository: StaffAuthRepository, memberModel: Model<MemberDocument>, branchModel: Model<BranchDocument>, districtModel: Model<DistrictDocument>, authSessionModel: Model<AuthSessionDocument>, deviceModel: Model<DeviceDocument>, onboardingEvidenceModel: Model<OnboardingEvidenceDocument>, staffStepUpTokenModel: Model<StaffStepUpTokenDocument>, memberProfilesService: MemberProfilesService, identityVerificationService: IdentityVerificationService, notificationsService: NotificationsService, emailNotificationProvider: EmailNotificationProvider, smsNotificationProvider: SmsNotificationProvider, auditService: AuditService);
     onModuleInit(): Promise<void>;
     checkExistingAccount(dto: CheckExistingAccountDto): Promise<CheckExistingAccountResult>;
+    getOnboardingStatus(dto: LookupOnboardingStatusDto): Promise<{
+        customerId: string;
+        phoneNumber: string;
+        branchName: string | undefined;
+        onboardingReviewStatus: string;
+        membershipStatus: string;
+        identityVerificationStatus: string;
+        reviewNote: string | undefined;
+        requiredAction: string;
+        statusMessage: string;
+        lastUpdatedAt: string | undefined;
+    }>;
     registerMember(dto: RegisterMemberDto): Promise<{
         customerId: string;
         memberId: string;
         message: string;
     }>;
+    private extractSelfieStorageKey;
     loginMember(dto: MemberLoginDto): Promise<LoginResult>;
     startLogin(dto: StartLoginDto): Promise<StartLoginResult>;
     verifyPinLogin(dto: VerifyPinLoginDto): Promise<LoginResult>;
     loginStaff(dto: StaffLoginDto): Promise<LoginResult>;
+    verifyStaffStepUp(currentUser: AuthenticatedUser, dto: VerifyStaffStepUpDto): Promise<{
+        stepUpToken: string;
+        verifiedAt: string;
+        expiresInSeconds: number;
+        method: string;
+    }>;
+    verifyHighRiskApprovalStepUpToken(currentUser: AuthenticatedUser, stepUpToken: string | undefined, memberId: string): Promise<{
+        verifiedAt: string | undefined;
+        method: string | undefined;
+        boundMemberId: string;
+        boundDecisionVersion: number;
+    }>;
     getCurrentSession(currentUser: AuthenticatedUser): Promise<{
         id: string;
         role: UserRole.MEMBER | UserRole.SHAREHOLDER_MEMBER;
@@ -58,6 +91,8 @@ export declare class AuthService implements OnModuleInit {
         identityVerificationStatus: string;
         featureFlags: {
             voting: boolean;
+            announcements: boolean;
+            dividends: boolean;
             schoolPayment: boolean;
             loans: boolean;
             savings: boolean;
@@ -66,14 +101,30 @@ export declare class AuthService implements OnModuleInit {
     }>;
     requestOtp(dto: RequestOtpDto): Promise<{
         phoneNumber: string;
-        deliveryChannel: string;
+        email: string | undefined;
+        purpose: string;
+        deliveryChannel: NotificationChannel;
+        maskedDestination: string;
         status: string;
         reference: string;
+        providerStatus: "failed" | "sent" | "delivered";
+    }>;
+    getRecoveryOptions(dto: RecoveryOptionsDto): Promise<{
+        phoneNumber: string;
+        channels: {
+            channel: string;
+            maskedDestination: string;
+        }[];
     }>;
     verifyOtp(dto: VerifyOtpDto): Promise<{
         phoneNumber: string;
         verified: boolean;
         status: string;
+    }>;
+    resetPin(dto: ResetPinDto): Promise<{
+        status: string;
+        phoneNumber: string;
+        message: string;
     }>;
     logout(currentUser: AuthenticatedUser): Promise<{
         success: boolean;
@@ -84,14 +135,10 @@ export declare class AuthService implements OnModuleInit {
     private buildFeatureFlags;
     private buildTokens;
     private verifyPassword;
-    private resolveStaffScopeName;
-    private logStaffLoginAttempt;
-    private logStaffAuthDecision;
-    private logTokenCreation;
-    private isDevelopmentAuthLoggingEnabled;
     private generateStandardIdentifiers;
     private generateDemoIdentifiers;
     private hashSecret;
+    private logStepUpFailure;
     private resolvePreferredBranch;
     private isDemoMode;
     private validateRegistrationInput;
@@ -100,4 +147,12 @@ export declare class AuthService implements OnModuleInit {
     private resolveOrCreateDemoBranch;
     private ensureDemoMemberAccount;
     private runRegistrationSideEffect;
+    private resolvePhoneNumber;
+    private resolveRequiredPhoneNumber;
+    private resolveOnboardingRequiredAction;
+    private resolveOnboardingStatusMessage;
+    private generateOtpCode;
+    private maskPhoneNumber;
+    private maskEmail;
+    private normalizePhoneNumber;
 }

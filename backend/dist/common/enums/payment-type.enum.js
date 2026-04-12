@@ -4,6 +4,7 @@ exports.PaymentType = void 0;
 var PaymentType;
 (function (PaymentType) {
     PaymentType["SCHOOL_PAYMENT"] = "school_payment";
+    PaymentType["QR_PAYMENT"] = "qr_payment";
     PaymentType["DEPOSIT"] = "deposit";
     PaymentType["WITHDRAWAL"] = "withdrawal";
     PaymentType["TRANSFER"] = "transfer";

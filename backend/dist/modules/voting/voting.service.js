@@ -18,23 +18,30 @@ const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const enums_1 = require("../../common/enums");
 const audit_service_1 = require("../audit/audit.service");
+const branch_schema_1 = require("../members/schemas/branch.schema");
+const district_schema_1 = require("../members/schemas/district.schema");
 const member_schema_1 = require("../members/schemas/member.schema");
-const notification_schema_1 = require("../notifications/schemas/notification.schema");
+const banking_notification_builders_1 = require("../notifications/banking-notification-builders");
+const notifications_service_1 = require("../notifications/notifications.service");
+const member_security_setting_schema_1 = require("../service-placeholders/schemas/member-security-setting.schema");
 const vote_otp_port_1 = require("./vote-otp.port");
 const vote_audit_log_schema_1 = require("./schemas/vote-audit-log.schema");
 const vote_option_schema_1 = require("./schemas/vote-option.schema");
 const vote_response_schema_1 = require("./schemas/vote-response.schema");
 const vote_schema_1 = require("./schemas/vote.schema");
 let VotingService = class VotingService {
-    constructor(voteModel, voteOptionModel, voteResponseModel, voteAuditLogModel, memberModel, notificationModel, voteOtpPort, auditService) {
+    constructor(voteModel, voteOptionModel, voteResponseModel, voteAuditLogModel, memberModel, branchModel, districtModel, securityModel, voteOtpPort, auditService, notificationsService) {
         this.voteModel = voteModel;
         this.voteOptionModel = voteOptionModel;
         this.voteResponseModel = voteResponseModel;
         this.voteAuditLogModel = voteAuditLogModel;
         this.memberModel = memberModel;
-        this.notificationModel = notificationModel;
+        this.branchModel = branchModel;
+        this.districtModel = districtModel;
+        this.securityModel = securityModel;
         this.voteOtpPort = voteOtpPort;
         this.auditService = auditService;
+        this.notificationsService = notificationsService;
     }
     async getActiveVotes() {
         const now = new Date();
@@ -75,7 +82,9 @@ let VotingService = class VotingService {
             throw new common_1.NotFoundException('Vote event not found.');
         }
         this.ensureShareholder(member);
+        this.ensureEligibleVotingMember(member);
         this.ensureVoteIsOpen(vote, new Date());
+        await this.ensureVotingAllowed(currentUser.sub);
         const [option, existingResponse] = await Promise.all([
             this.voteOptionModel.findOne({
                 _id: new mongoose_2.Types.ObjectId(dto.optionId),
@@ -115,18 +124,19 @@ let VotingService = class VotingService {
                 optionId: dto.optionId,
             },
         });
-        await this.notificationModel.create({
+        const notification = (0, banking_notification_builders_1.buildVoteRecordedNotification)(vote.title);
+        await this.notificationsService.createNotification({
             userType: 'member',
-            userId: new mongoose_2.Types.ObjectId(currentUser.sub),
+            userId: currentUser.sub,
             userRole: currentUser.role,
-            type: enums_1.NotificationType.VOTING,
-            status: enums_1.NotificationStatus.SENT,
-            title: 'Vote Recorded',
-            message: `Your vote for ${vote.title} has been recorded.`,
+            type: notification.type,
+            status: notification.status,
+            title: notification.title,
+            message: notification.message,
             entityType: 'vote',
-            entityId: new mongoose_2.Types.ObjectId(voteId),
+            entityId: voteId,
         });
-        await this.auditService.log({
+        await this.auditService.logActorAction({
             actorId: currentUser.sub,
             actorRole: currentUser.role,
             actionType: 'vote_submitted',
@@ -145,10 +155,13 @@ let VotingService = class VotingService {
             otpVerifiedAt,
         };
     }
-    async getVoteResults(voteId) {
+    async getVoteResults(currentUser, voteId) {
         const vote = await this.voteModel.findById(voteId).lean();
         if (!vote) {
             throw new common_1.NotFoundException('Vote event not found.');
+        }
+        if (vote.status !== enums_1.VoteStatus.CLOSED) {
+            this.ensureAdminAccess(currentUser);
         }
         const [options, responses] = await Promise.all([
             this.voteOptionModel
@@ -201,6 +214,7 @@ let VotingService = class VotingService {
             return {
                 ...this.toVoteSummary(vote),
                 totalResponses,
+                eligibleShareholders,
                 participationRate: eligibleShareholders === 0
                     ? 0
                     : Number(((totalResponses / eligibleShareholders) * 100).toFixed(2)),
@@ -209,6 +223,7 @@ let VotingService = class VotingService {
     }
     async createVote(currentUser, dto) {
         this.ensureAdminAccess(currentUser);
+        this.validateVoteSchedule(dto.startDate, dto.endDate);
         const vote = await this.voteModel.create({
             title: dto.title,
             description: dto.description,
@@ -218,6 +233,12 @@ let VotingService = class VotingService {
             endDate: new Date(dto.endDate),
             createdBy: new mongoose_2.Types.ObjectId(currentUser.sub),
         });
+        await this.voteOptionModel.insertMany(dto.options.map((option, index) => ({
+            voteId: vote._id,
+            name: option.name,
+            description: option.description,
+            displayOrder: option.displayOrder ?? index + 1,
+        })));
         return this.toVoteSummary(vote);
     }
     async addVoteOption(currentUser, voteId, dto) {
@@ -225,6 +246,9 @@ let VotingService = class VotingService {
         const vote = await this.voteModel.findById(voteId).lean();
         if (!vote) {
             throw new common_1.NotFoundException('Vote event not found.');
+        }
+        if (vote.status !== enums_1.VoteStatus.DRAFT) {
+            throw new common_1.BadRequestException('Vote options can only be changed while the event is in draft.');
         }
         const option = await this.voteOptionModel.create({
             voteId: new mongoose_2.Types.ObjectId(voteId),
@@ -248,33 +272,85 @@ let VotingService = class VotingService {
         if (!vote) {
             throw new common_1.NotFoundException('Vote event not found.');
         }
-        const [summary] = await this.voteResponseModel.aggregate([
-            { $match: { voteId: new mongoose_2.Types.ObjectId(voteId) } },
-            {
-                $group: {
-                    _id: null,
-                    totalResponses: { $sum: 1 },
-                    branches: { $addToSet: '$branchId' },
-                },
-            },
-            {
-                $project: {
-                    _id: 0,
-                    totalResponses: 1,
-                    uniqueBranches: { $size: '$branches' },
-                },
-            },
+        const responses = await this.voteResponseModel
+            .find({ voteId: new mongoose_2.Types.ObjectId(voteId) })
+            .lean();
+        const eligibleShareholders = await this.memberModel.countDocuments({
+            memberType: enums_1.MemberType.SHAREHOLDER,
+        });
+        const branchCountMap = new Map();
+        const districtCountMap = new Map();
+        for (const response of responses) {
+            const branchId = response.branchId.toString();
+            const districtId = response.districtId.toString();
+            branchCountMap.set(branchId, (branchCountMap.get(branchId) ?? 0) + 1);
+            districtCountMap.set(districtId, (districtCountMap.get(districtId) ?? 0) + 1);
+        }
+        const [branches, districts] = await Promise.all([
+            branchCountMap.size
+                ? this.branchModel
+                    .find({
+                    _id: {
+                        $in: Array.from(branchCountMap.keys()).map((id) => new mongoose_2.Types.ObjectId(id)),
+                    },
+                })
+                    .lean()
+                : Promise.resolve([]),
+            districtCountMap.size
+                ? this.districtModel
+                    .find({
+                    _id: {
+                        $in: Array.from(districtCountMap.keys()).map((id) => new mongoose_2.Types.ObjectId(id)),
+                    },
+                })
+                    .lean()
+                : Promise.resolve([]),
         ]);
-        return summary ?? { totalResponses: 0, uniqueBranches: 0 };
+        return {
+            totalResponses: responses.length,
+            uniqueBranches: branchCountMap.size,
+            uniqueDistricts: districtCountMap.size,
+            eligibleShareholders,
+            participationRate: eligibleShareholders === 0
+                ? 0
+                : Number(((responses.length / eligibleShareholders) * 100).toFixed(2)),
+            branchParticipation: branches
+                .map((branch) => ({
+                id: branch._id.toString(),
+                name: branch.name,
+                totalResponses: branchCountMap.get(branch._id.toString()) ?? 0,
+            }))
+                .sort((left, right) => right.totalResponses - left.totalResponses),
+            districtParticipation: districts
+                .map((district) => ({
+                id: district._id.toString(),
+                name: district.name,
+                totalResponses: districtCountMap.get(district._id.toString()) ?? 0,
+            }))
+                .sort((left, right) => right.totalResponses - left.totalResponses),
+        };
     }
     async updateVoteStatus(voteId, status) {
-        const vote = await this.voteModel
-            .findByIdAndUpdate(voteId, { $set: { status } }, { new: true })
-            .lean();
+        const vote = await this.voteModel.findById(voteId).lean();
         if (!vote) {
             throw new common_1.NotFoundException('Vote event not found.');
         }
-        return this.toVoteSummary(vote);
+        if (status === enums_1.VoteStatus.OPEN) {
+            this.validateVoteSchedule(vote.startDate.toISOString(), vote.endDate.toISOString());
+            const optionCount = await this.voteOptionModel.countDocuments({
+                voteId: new mongoose_2.Types.ObjectId(voteId),
+            });
+            if (optionCount < 2) {
+                throw new common_1.BadRequestException('A governance vote must have at least two options before opening.');
+            }
+        }
+        const updatedVote = await this.voteModel
+            .findByIdAndUpdate(voteId, { $set: { status } }, { new: true })
+            .lean();
+        if (!updatedVote) {
+            throw new common_1.NotFoundException('Vote event not found.');
+        }
+        return this.toVoteSummary(updatedVote);
     }
     ensureMemberAccess(currentUser) {
         if (currentUser.role !== enums_1.UserRole.MEMBER &&
@@ -294,6 +370,22 @@ let VotingService = class VotingService {
             throw new common_1.ForbiddenException('Only shareholder members can vote.');
         }
     }
+    ensureEligibleVotingMember(member) {
+        if (!member.isActive) {
+            throw new common_1.ForbiddenException('Inactive members cannot vote.');
+        }
+        if (!['verified', 'demo_approved', 'active_demo'].includes(member.kycStatus)) {
+            throw new common_1.ForbiddenException('Complete identity verification before participating in governance voting.');
+        }
+    }
+    async ensureVotingAllowed(memberId) {
+        const security = await this.securityModel
+            .findOne({ memberId: new mongoose_2.Types.ObjectId(memberId) })
+            .lean();
+        if (security?.accountLockEnabled) {
+            throw new common_1.ForbiddenException('Account lock is enabled. Unlock the account before voting.');
+        }
+    }
     ensureVoteIsOpen(vote, now) {
         if (vote.status !== enums_1.VoteStatus.OPEN) {
             throw new common_1.BadRequestException('Voting event is not open.');
@@ -303,6 +395,15 @@ let VotingService = class VotingService {
         }
         if (now > vote.endDate) {
             throw new common_1.BadRequestException('Voting event is already closed.');
+        }
+    }
+    validateVoteSchedule(startDateRaw, endDateRaw) {
+        const startDate = new Date(startDateRaw);
+        const endDate = new Date(endDateRaw);
+        if (Number.isNaN(startDate.getTime()) ||
+            Number.isNaN(endDate.getTime()) ||
+            startDate >= endDate) {
+            throw new common_1.BadRequestException('Vote schedule is invalid. End date must be after start date.');
         }
     }
     toVoteSummary(vote) {
@@ -334,13 +435,18 @@ exports.VotingService = VotingService = __decorate([
     __param(2, (0, mongoose_1.InjectModel)(vote_response_schema_1.VoteResponse.name)),
     __param(3, (0, mongoose_1.InjectModel)(vote_audit_log_schema_1.VoteAuditLog.name)),
     __param(4, (0, mongoose_1.InjectModel)(member_schema_1.Member.name)),
-    __param(5, (0, mongoose_1.InjectModel)(notification_schema_1.Notification.name)),
-    __param(6, (0, common_1.Inject)(vote_otp_port_1.VOTE_OTP_PORT)),
+    __param(5, (0, mongoose_1.InjectModel)(branch_schema_1.Branch.name)),
+    __param(6, (0, mongoose_1.InjectModel)(district_schema_1.District.name)),
+    __param(7, (0, mongoose_1.InjectModel)(member_security_setting_schema_1.MemberSecuritySetting.name)),
+    __param(8, (0, common_1.Inject)(vote_otp_port_1.VOTE_OTP_PORT)),
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
-        mongoose_2.Model, Object, audit_service_1.AuditService])
+        mongoose_2.Model,
+        mongoose_2.Model,
+        mongoose_2.Model, Object, audit_service_1.AuditService,
+        notifications_service_1.NotificationsService])
 ], VotingService);
 //# sourceMappingURL=voting.service.js.map

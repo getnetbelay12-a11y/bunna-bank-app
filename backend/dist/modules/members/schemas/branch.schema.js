@@ -32,7 +32,7 @@ __decorate([
     __metadata("design:type", String)
 ], Branch.prototype, "city", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ trim: true, default: 'Amhara', index: true }),
+    (0, mongoose_1.Prop)({ trim: true, default: 'National', index: true }),
     __metadata("design:type", String)
 ], Branch.prototype, "region", void 0);
 __decorate([

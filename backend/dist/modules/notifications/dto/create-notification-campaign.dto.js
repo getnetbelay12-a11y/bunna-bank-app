@@ -37,7 +37,7 @@ __decorate([
     (0, class_validator_1.ValidateIf)((value) => ['single_customer', 'selected_customers'].includes(value.targetType)),
     (0, class_validator_1.IsArray)(),
     (0, class_validator_1.ArrayNotEmpty)(),
-    (0, class_validator_1.IsMongoId)({ each: true }),
+    (0, class_validator_1.IsString)({ each: true }),
     __metadata("design:type", Array)
 ], CreateNotificationCampaignDto.prototype, "targetIds", void 0);
 __decorate([

@@ -10,6 +10,7 @@ exports.ChatModule = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const audit_module_1 = require("../audit/audit.module");
+const loan_schema_1 = require("../loans/schemas/loan.schema");
 const notifications_module_1 = require("../notifications/notifications.module");
 const chat_controller_1 = require("./chat.controller");
 const chat_service_1 = require("./chat.service");
@@ -30,6 +31,7 @@ exports.ChatModule = ChatModule = __decorate([
                 { name: chat_participant_schema_1.ChatParticipant.name, schema: chat_participant_schema_1.ChatParticipantSchema },
                 { name: chat_assignment_schema_1.ChatAssignment.name, schema: chat_assignment_schema_1.ChatAssignmentSchema },
                 { name: chat_status_log_schema_1.ChatStatusLog.name, schema: chat_status_log_schema_1.ChatStatusLogSchema },
+                { name: loan_schema_1.Loan.name, schema: loan_schema_1.LoanSchema },
             ]),
             notifications_module_1.NotificationsModule,
             audit_module_1.AuditModule,

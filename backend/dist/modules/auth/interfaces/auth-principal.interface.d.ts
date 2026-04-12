@@ -13,6 +13,9 @@ export interface AuthPrincipal {
     phone?: string;
     branchId?: string;
     districtId?: string;
+    schoolId?: string;
+    schoolName?: string;
     branchName?: string;
     districtName?: string;
+    permissions?: string[];
 }

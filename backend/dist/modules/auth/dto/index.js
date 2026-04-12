@@ -20,7 +20,12 @@ __exportStar(require("./staff-login.dto"), exports);
 __exportStar(require("./check-existing-account.dto"), exports);
 __exportStar(require("./register-member.dto"), exports);
 __exportStar(require("./request-otp.dto"), exports);
+__exportStar(require("./recovery-options.dto"), exports);
+__exportStar(require("./reset-pin.dto"), exports);
 __exportStar(require("./start-login.dto"), exports);
 __exportStar(require("./verify-pin-login.dto"), exports);
 __exportStar(require("./verify-otp.dto"), exports);
+__exportStar(require("./lookup-onboarding-status.dto"), exports);
+__exportStar(require("./fayda-extraction.dto"), exports);
+__exportStar(require("./verify-staff-step-up.dto"), exports);
 //# sourceMappingURL=index.js.map

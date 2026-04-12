@@ -18,7 +18,6 @@ class CreateLoanApplicationDto {
 exports.CreateLoanApplicationDto = CreateLoanApplicationDto;
 __decorate([
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MaxLength)(64),
     __metadata("design:type", String)
 ], CreateLoanApplicationDto.prototype, "loanType", void 0);
 __decorate([
@@ -38,7 +37,6 @@ __decorate([
 ], CreateLoanApplicationDto.prototype, "termMonths", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MaxLength)(1000),
     __metadata("design:type", String)
 ], CreateLoanApplicationDto.prototype, "purpose", void 0);
 __decorate([
@@ -49,7 +47,6 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.ArrayMaxSize)(create_loan_document_dto_1.MAX_LOAN_DOCUMENTS),
     (0, class_validator_1.ValidateNested)({ each: true }),
     (0, class_transformer_1.Type)(() => create_loan_document_dto_1.CreateLoanDocumentDto),
     __metadata("design:type", Array)

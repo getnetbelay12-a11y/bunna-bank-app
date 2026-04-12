@@ -14,11 +14,13 @@ export declare class LoansController {
     }>;
     getMyLoans(currentUser: AuthenticatedUser): Promise<import("./interfaces").LoanDetail[]>;
     getLoanDetail(currentUser: AuthenticatedUser, loanId: string): Promise<import("./interfaces").LoanDetail>;
-    getLoanTimeline(loanId: string): {
+    getLoanTimeline(currentUser: AuthenticatedUser, loanId: string): Promise<{
         loanId: string;
         timeline: {
             status: string;
             title: string;
+            description: string;
+            isCompleted: boolean;
         }[];
-    };
+    }>;
 }

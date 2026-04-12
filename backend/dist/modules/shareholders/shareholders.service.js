@@ -28,7 +28,7 @@ let ShareholdersService = class ShareholdersService {
         if (!member) {
             throw new common_1.NotFoundException('Shareholder not found.');
         }
-        return member;
+        return this.toShareholderProfile(member);
     }
     async getMyVotingEligibility(currentUser) {
         this.ensureShareholderPrincipal(currentUser);
@@ -44,7 +44,7 @@ let ShareholdersService = class ShareholdersService {
         if (!member) {
             throw new common_1.NotFoundException('Shareholder not found.');
         }
-        return member;
+        return this.toShareholderProfile(member);
     }
     async getVotingEligibilityByMemberId(currentUser, memberId) {
         this.ensureStaffAccess(currentUser);
@@ -97,6 +97,14 @@ let ShareholdersService = class ShareholdersService {
             currentUser.role === enums_1.UserRole.SHAREHOLDER_MEMBER) {
             throw new common_1.ForbiddenException('Only staff users can access this resource.');
         }
+    }
+    toShareholderProfile(member) {
+        return {
+            ...member,
+            shareholderId: member.shareholderId ?? member.memberNumber,
+            shares: member.shares ?? member.shareBalance,
+            shareBalance: member.shareBalance ?? member.shares ?? 0,
+        };
     }
 };
 exports.ShareholdersService = ShareholdersService;

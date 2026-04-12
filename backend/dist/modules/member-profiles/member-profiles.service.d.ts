@@ -11,6 +11,7 @@ export declare class MemberProfilesService {
         consentAccepted: boolean;
         membershipStatus?: string;
         identityVerificationStatus?: string;
+        onboardingReviewStatus?: string;
     }): Promise<import("mongoose").Document<unknown, {}, import("mongoose").Document<unknown, {}, MemberProfileEntity, {}, {}> & MemberProfileEntity & {
         _id: Types.ObjectId;
     } & {
@@ -30,6 +31,10 @@ export declare class MemberProfilesService {
     updateStatuses(memberId: string, input: {
         membershipStatus?: string;
         identityVerificationStatus?: string;
+        onboardingReviewStatus?: string;
+        onboardingReviewNote?: string;
+        onboardingReviewedBy?: string;
+        onboardingLastReviewedAt?: Date;
     }): Promise<(import("mongoose").Document<unknown, {}, import("mongoose").Document<unknown, {}, MemberProfileEntity, {}, {}> & MemberProfileEntity & {
         _id: Types.ObjectId;
     } & {

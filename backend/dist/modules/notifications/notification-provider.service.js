@@ -8,125 +8,188 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var NotificationProviderService_1;
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotificationProviderService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
-let NotificationProviderService = NotificationProviderService_1 = class NotificationProviderService {
-    constructor(configService) {
-        this.configService = configService;
-        this.logger = new common_1.Logger(NotificationProviderService_1.name);
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const enums_1 = require("../../common/enums");
+const member_schema_1 = require("../members/schemas/member.schema");
+const channel_notification_provider_port_1 = require("./channel-notification-provider.port");
+let NotificationProviderService = class NotificationProviderService {
+    constructor(memberModel, mobilePushProvider, emailProvider, smsProvider) {
+        this.memberModel = memberModel;
+        this.mobilePushProvider = mobilePushProvider;
+        this.emailProvider = emailProvider;
+        this.smsProvider = smsProvider;
     }
     async dispatch(payload) {
-        const config = this.configService.getOrThrow('notifications');
-        const channelResults = await Promise.all([
-            this.dispatchPush(config.push, payload),
-            this.dispatchSms(config.sms, payload),
-            this.dispatchEmail(config.email, payload),
-        ]);
-        const enabledChannels = [
-            config.push.enabled,
-            config.sms.enabled,
-            config.email.enabled,
-        ].filter(Boolean).length;
-        if (enabledChannels === 0) {
-            this.logger.debug(`No outbound notification channels enabled for ${payload.userType}:${payload.userId}.`);
-            return true;
-        }
-        return channelResults.some(Boolean);
-    }
-    async dispatchPush(config, payload) {
-        if (!config.enabled) {
-            return false;
-        }
-        if (config.provider === 'log') {
-            this.logger.log(`Push notification queued in log mode for ${payload.userType}:${payload.userId} - ${payload.title}`);
-            return true;
-        }
-        if (config.provider === 'generic_http') {
-            return this.postToGenericEndpoint(config.endpoint, config.apiKey, {
-                channel: 'push',
-                ...payload,
+        const category = this.resolveCategory(payload.type);
+        const preferredChannel = payload.preferredChannel ?? enums_1.NotificationChannel.MOBILE_PUSH;
+        const member = payload.userType === 'member'
+            ? await this.memberModel
+                .findById(new mongoose_2.Types.ObjectId(payload.userId))
+                .lean()
+            : null;
+        if (preferredChannel === enums_1.NotificationChannel.MOBILE_PUSH) {
+            const pushResult = await this.mobilePushProvider.send({
+                channel: enums_1.NotificationChannel.MOBILE_PUSH,
+                recipient: payload.userId,
+                memberId: payload.userId,
+                category,
+                subject: payload.title,
+                messageBody: payload.message,
+                actionLabel: payload.actionLabel,
+                deepLink: payload.deepLink,
+                dataPayload: payload.dataPayload,
             });
-        }
-        if (config.provider === 'firebase') {
-            if (!config.firebaseProjectId ||
-                !config.firebaseClientEmail ||
-                !config.firebasePrivateKey) {
-                this.logger.warn('Firebase push provider is enabled but FIREBASE_* credentials are incomplete.');
-                return false;
+            if (pushResult.status !== 'failed') {
+                return {
+                    channel: enums_1.NotificationChannel.MOBILE_PUSH,
+                    status: enums_1.NotificationStatus.SENT,
+                    deliveredAt: new Date(),
+                    category,
+                };
             }
-            this.logger.warn('Firebase provider is configured but no firebase-admin integration is installed in this PoC yet.');
-            return false;
-        }
-        return false;
-    }
-    async dispatchSms(config, payload) {
-        if (!config.enabled) {
-            return false;
-        }
-        if (config.provider === 'log') {
-            this.logger.log(`SMS notification queued in log mode for ${payload.userType}:${payload.userId} - ${payload.title}`);
-            return true;
-        }
-        if (config.provider === 'generic_http') {
-            return this.postToGenericEndpoint(config.endpoint, config.apiKey, {
-                channel: 'sms',
-                senderId: config.senderId,
-                ...payload,
-            });
-        }
-        return false;
-    }
-    async dispatchEmail(config, payload) {
-        if (!config.enabled) {
-            return false;
-        }
-        if (config.provider === 'log') {
-            this.logger.log(`Email notification queued in log mode for ${payload.userType}:${payload.userId} - ${payload.title}`);
-            return true;
-        }
-        if (config.provider === 'generic_http') {
-            return this.postToGenericEndpoint(config.endpoint, config.apiKey, {
-                channel: 'email',
-                sender: config.sender,
-                ...payload,
-            });
-        }
-        if (config.provider === 'smtp') {
-            if (!config.smtpHost || !config.smtpUser || !config.smtpPass) {
-                this.logger.warn('SMTP email provider is enabled but EMAIL_SMTP_* settings are incomplete.');
-                return false;
+            if (member?.email) {
+                const emailResult = await this.emailProvider.send({
+                    channel: enums_1.NotificationChannel.EMAIL,
+                    recipient: member.email,
+                    memberId: payload.userId,
+                    category,
+                    subject: payload.title,
+                    messageBody: payload.message,
+                });
+                if (emailResult.status !== 'failed') {
+                    return {
+                        channel: enums_1.NotificationChannel.EMAIL,
+                        fallbackChannel: enums_1.NotificationChannel.MOBILE_PUSH,
+                        status: enums_1.NotificationStatus.SENT,
+                        deliveredAt: new Date(),
+                        category,
+                    };
+                }
             }
-            this.logger.warn('SMTP provider is configured but no SMTP transport is installed in this PoC yet.');
-            return false;
+            if (payload.priority === 'high' && member?.phone) {
+                const smsResult = await this.smsProvider.send({
+                    channel: enums_1.NotificationChannel.SMS,
+                    recipient: member.phone,
+                    memberId: payload.userId,
+                    category,
+                    subject: payload.title,
+                    messageBody: payload.message,
+                });
+                if (smsResult.status !== 'failed') {
+                    return {
+                        channel: enums_1.NotificationChannel.SMS,
+                        fallbackChannel: enums_1.NotificationChannel.MOBILE_PUSH,
+                        status: enums_1.NotificationStatus.SENT,
+                        deliveredAt: new Date(),
+                        category,
+                    };
+                }
+            }
+            return {
+                channel: enums_1.NotificationChannel.MOBILE_PUSH,
+                status: enums_1.NotificationStatus.FAILED,
+                errorMessage: pushResult.errorMessage,
+                category,
+            };
         }
-        return false;
+        if (preferredChannel === enums_1.NotificationChannel.EMAIL && member?.email) {
+            const emailResult = await this.emailProvider.send({
+                channel: enums_1.NotificationChannel.EMAIL,
+                recipient: member.email,
+                memberId: payload.userId,
+                category,
+                subject: payload.title,
+                messageBody: payload.message,
+            });
+            return {
+                channel: enums_1.NotificationChannel.EMAIL,
+                status: emailResult.status === 'failed'
+                    ? enums_1.NotificationStatus.FAILED
+                    : enums_1.NotificationStatus.SENT,
+                deliveredAt: emailResult.status === 'failed' ? undefined : new Date(),
+                errorMessage: emailResult.errorMessage,
+                category,
+            };
+        }
+        return {
+            channel: preferredChannel,
+            status: enums_1.NotificationStatus.FAILED,
+            errorMessage: 'No recipient or provider was available for the selected channel.',
+            category,
+        };
     }
-    async postToGenericEndpoint(endpoint, apiKey, payload) {
-        if (!endpoint) {
-            this.logger.warn('Generic notification endpoint is missing.');
-            return false;
+    resolveCategory(type) {
+        switch (type) {
+            case enums_1.NotificationType.LOAN_DUE:
+            case enums_1.NotificationType.LOAN_OVERDUE:
+            case enums_1.NotificationType.LOAN_APPROVED:
+            case enums_1.NotificationType.LOAN_REJECTED:
+            case enums_1.NotificationType.LOAN_DOCUMENT_REQUIRED:
+            case enums_1.NotificationType.LOAN_DISBURSED:
+            case enums_1.NotificationType.LOAN_STATUS:
+                return enums_1.NotificationCategory.LOAN;
+            case enums_1.NotificationType.INSURANCE_DUE:
+            case enums_1.NotificationType.INSURANCE_RENEWAL_DUE:
+            case enums_1.NotificationType.INSURANCE_EXPIRING:
+            case enums_1.NotificationType.INSURANCE_EXPIRED:
+            case enums_1.NotificationType.LOAN_LINKED_INSURANCE_REMINDER:
+            case enums_1.NotificationType.INSURANCE:
+                return enums_1.NotificationCategory.INSURANCE;
+            case enums_1.NotificationType.PAYMENT_SUCCESS:
+            case enums_1.NotificationType.PAYMENT_FAILED:
+            case enums_1.NotificationType.SCHOOL_PAYMENT_DUE:
+            case enums_1.NotificationType.PAYMENT:
+                return enums_1.NotificationCategory.PAYMENT;
+            case enums_1.NotificationType.AUTOPAY_SUCCESS:
+            case enums_1.NotificationType.AUTOPAY_FAILED:
+                return enums_1.NotificationCategory.AUTOPAY;
+            case enums_1.NotificationType.SUPPORT_ASSIGNED:
+            case enums_1.NotificationType.SUPPORT_REPLY:
+            case enums_1.NotificationType.SUPPORT_RESOLVED:
+            case enums_1.NotificationType.CHAT:
+            case enums_1.NotificationType.SERVICE_REQUEST:
+                return enums_1.NotificationCategory.SUPPORT;
+            case enums_1.NotificationType.LOGIN_DETECTED:
+            case enums_1.NotificationType.SUSPICIOUS_LOGIN:
+            case enums_1.NotificationType.ACCOUNT_LOCKED:
+            case enums_1.NotificationType.ACCOUNT_UNLOCKED:
+            case enums_1.NotificationType.PHONE_NUMBER_CHANGE_REQUESTED:
+            case enums_1.NotificationType.PHONE_NUMBER_CHANGE_COMPLETED:
+                return enums_1.NotificationCategory.SECURITY;
+            case enums_1.NotificationType.KYC_SUBMITTED:
+            case enums_1.NotificationType.KYC_VERIFIED:
+            case enums_1.NotificationType.KYC_REJECTED:
+            case enums_1.NotificationType.KYC_NEED_MORE_INFORMATION:
+                return enums_1.NotificationCategory.KYC;
+            case enums_1.NotificationType.SHAREHOLDER_ANNOUNCEMENT:
+            case enums_1.NotificationType.VOTE_OPEN:
+            case enums_1.NotificationType.VOTE_CLOSING_SOON:
+            case enums_1.NotificationType.VOTE_RESULT_PUBLISHED:
+            case enums_1.NotificationType.SHAREHOLDER_VOTE:
+            case enums_1.NotificationType.VOTING:
+                return enums_1.NotificationCategory.SHAREHOLDER;
+            case enums_1.NotificationType.ANNOUNCEMENT:
+            case enums_1.NotificationType.CAMPAIGN:
+            case enums_1.NotificationType.SYSTEM:
+            default:
+                return enums_1.NotificationCategory.SYSTEM;
         }
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            this.logger.warn(`Generic notification endpoint returned HTTP ${response.status}.`);
-            return false;
-        }
-        return true;
     }
 };
 exports.NotificationProviderService = NotificationProviderService;
-exports.NotificationProviderService = NotificationProviderService = NotificationProviderService_1 = __decorate([
+exports.NotificationProviderService = NotificationProviderService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __param(0, (0, mongoose_1.InjectModel)(member_schema_1.Member.name)),
+    __param(1, (0, common_1.Inject)(channel_notification_provider_port_1.MOBILE_PUSH_NOTIFICATION_PROVIDER)),
+    __param(2, (0, common_1.Inject)(channel_notification_provider_port_1.EMAIL_NOTIFICATION_PROVIDER)),
+    __param(3, (0, common_1.Inject)(channel_notification_provider_port_1.SMS_NOTIFICATION_PROVIDER)),
+    __metadata("design:paramtypes", [mongoose_2.Model, Object, Object, Object])
 ], NotificationProviderService);
 //# sourceMappingURL=notification-provider.service.js.map

@@ -21,18 +21,18 @@ const storage_service_1 = require("../../common/storage/storage.service");
 const audit_service_1 = require("../audit/audit.service");
 const loan_workflow_history_schema_1 = require("../loan-workflow/schemas/loan-workflow-history.schema");
 const member_schema_1 = require("../members/schemas/member.schema");
-const notification_schema_1 = require("../notifications/schemas/notification.schema");
-const create_loan_document_dto_1 = require("./dto/create-loan-document.dto");
+const banking_notification_builders_1 = require("../notifications/banking-notification-builders");
+const notifications_service_1 = require("../notifications/notifications.service");
 const loan_document_schema_1 = require("./schemas/loan-document.schema");
 const loan_schema_1 = require("./schemas/loan.schema");
 let LoansService = class LoansService {
-    constructor(loanModel, loanDocumentModel, workflowHistoryModel, notificationModel, memberModel, auditService, storageService) {
+    constructor(loanModel, loanDocumentModel, workflowHistoryModel, memberModel, auditService, notificationsService, storageService) {
         this.loanModel = loanModel;
         this.loanDocumentModel = loanDocumentModel;
         this.workflowHistoryModel = workflowHistoryModel;
-        this.notificationModel = notificationModel;
         this.memberModel = memberModel;
         this.auditService = auditService;
+        this.notificationsService = notificationsService;
         this.storageService = storageService;
     }
     async submitLoanApplication(currentUser, dto) {
@@ -67,18 +67,22 @@ let LoansService = class LoansService {
             actorRole: currentUser.role,
             comment: 'Loan application submitted by member.',
         });
-        await this.notificationModel.create({
+        const notification = (0, banking_notification_builders_1.buildLoanSubmissionNotification)();
+        await this.notificationsService.createNotification({
             userType: 'member',
-            userId: new mongoose_2.Types.ObjectId(currentUser.sub),
+            userId: currentUser.sub,
             userRole: currentUser.role,
-            type: enums_1.NotificationType.LOAN_STATUS,
-            status: 'sent',
-            title: 'Loan Application Submitted',
-            message: 'Your loan application has been submitted successfully.',
+            type: notification.type,
+            status: notification.status,
+            title: notification.title,
+            message: notification.message,
             entityType: 'loan',
-            entityId: loan._id,
+            entityId: loan._id.toString(),
+            actionLabel: 'Open loan',
+            priority: 'normal',
+            deepLink: `/loans/${loan._id.toString()}`,
         });
-        await this.auditService.log({
+        await this.auditService.logActorAction({
             actorId: currentUser.sub,
             actorRole: currentUser.role,
             actionType: 'loan_submitted',
@@ -127,11 +131,101 @@ let LoansService = class LoansService {
         }
         return this.toLoanDetail(loan);
     }
+    async getLoanTimeline(currentUser, loanId) {
+        this.ensureMemberAccess(currentUser);
+        const loan = await this.loanModel.findById(loanId).lean();
+        if (!loan || loan.memberId.toString() !== currentUser.sub) {
+            throw new common_1.NotFoundException('Loan not found.');
+        }
+        const deficiencyReasons = loan.deficiencyReasons ?? [];
+        return {
+            loanId,
+            timeline: [
+                {
+                    status: 'submitted',
+                    title: 'Submitted',
+                    description: 'Your application was received and entered into the review queue.',
+                    isCompleted: true,
+                },
+                {
+                    status: 'branch_review',
+                    title: 'Branch Review',
+                    description: deficiencyReasons.length > 0 && loan.currentLevel === enums_1.LoanWorkflowLevel.BRANCH
+                        ? `Branch review needs more evidence: ${deficiencyReasons.join(', ')}.`
+                        : 'Branch team is validating the application package and first-line controls.',
+                    isCompleted: loan.currentLevel !== enums_1.LoanWorkflowLevel.BRANCH ||
+                        ![enums_1.LoanStatus.SUBMITTED, enums_1.LoanStatus.BRANCH_REVIEW].includes(loan.status),
+                },
+                {
+                    status: 'district_review',
+                    title: 'District Review',
+                    description: deficiencyReasons.length > 0 && loan.currentLevel === enums_1.LoanWorkflowLevel.DISTRICT
+                        ? `District review is waiting on: ${deficiencyReasons.join(', ')}.`
+                        : 'District review applies for escalated or higher-value cases.',
+                    isCompleted: loan.currentLevel === enums_1.LoanWorkflowLevel.HEAD_OFFICE ||
+                        [
+                            enums_1.LoanStatus.APPROVED,
+                            enums_1.LoanStatus.DISBURSED,
+                            enums_1.LoanStatus.CLOSED,
+                            enums_1.LoanStatus.REJECTED,
+                        ].includes(loan.status),
+                },
+                {
+                    status: 'head_office_review',
+                    title: 'Head Office Review',
+                    description: loan.currentLevel === enums_1.LoanWorkflowLevel.HEAD_OFFICE
+                        ? 'Head office credit control is reviewing final approval and disbursement readiness.'
+                        : 'Head office review is only required for higher-risk or escalated applications.',
+                    isCompleted: [
+                        enums_1.LoanStatus.APPROVED,
+                        enums_1.LoanStatus.DISBURSED,
+                        enums_1.LoanStatus.CLOSED,
+                        enums_1.LoanStatus.REJECTED,
+                    ].includes(loan.status),
+                },
+                {
+                    status: 'need_documents',
+                    title: 'Need Documents',
+                    description: deficiencyReasons.length > 0
+                        ? `Customer action is required before approval: ${deficiencyReasons.join(', ')}.`
+                        : 'No missing documents are blocking this application right now.',
+                    isCompleted: deficiencyReasons.length === 0,
+                },
+                {
+                    status: 'approved',
+                    title: 'Approved',
+                    description: loan.status === enums_1.LoanStatus.APPROVED || loan.status === enums_1.LoanStatus.DISBURSED
+                        ? 'The loan is approved. Watch disbursement and repayment reminders.'
+                        : 'Approval is still pending while the review team completes its checks.',
+                    isCompleted: [
+                        enums_1.LoanStatus.APPROVED,
+                        enums_1.LoanStatus.DISBURSED,
+                        enums_1.LoanStatus.CLOSED,
+                    ].includes(loan.status),
+                },
+                {
+                    status: 'rejected',
+                    title: 'Rejected',
+                    description: loan.status === enums_1.LoanStatus.REJECTED
+                        ? 'The application was rejected. Contact support or submit a new package after correcting the identified issues.'
+                        : 'Rejected only appears if the loan cannot proceed after review.',
+                    isCompleted: loan.status === enums_1.LoanStatus.REJECTED,
+                },
+                {
+                    status: 'disbursed',
+                    title: 'Disbursed',
+                    description: loan.status === enums_1.LoanStatus.DISBURSED
+                        ? 'Funds have been released. Repayment and insurance reminders will continue in your notification center.'
+                        : 'Disbursement happens after approval, verification, and final operations checks.',
+                    isCompleted: [enums_1.LoanStatus.DISBURSED, enums_1.LoanStatus.CLOSED].includes(loan.status),
+                },
+            ],
+        };
+    }
     async createLoanDocuments(loanId, memberId, documents) {
         if (documents.length === 0) {
             return [];
         }
-        this.validateLoanDocuments(documents);
         const preparedDocuments = await Promise.all(documents.map(async (document) => {
             const storedDocument = document.storageKey
                 ? {
@@ -161,19 +255,6 @@ let LoansService = class LoansService {
         }));
         return this.loanDocumentModel.create(preparedDocuments);
     }
-    validateLoanDocuments(documents) {
-        if (documents.length > create_loan_document_dto_1.MAX_LOAN_DOCUMENTS) {
-            throw new common_1.BadRequestException(`A loan application can include at most ${create_loan_document_dto_1.MAX_LOAN_DOCUMENTS} documents.`);
-        }
-        for (const document of documents) {
-            if (document.sizeBytes != null && document.sizeBytes > create_loan_document_dto_1.MAX_LOAN_DOCUMENT_SIZE_BYTES) {
-                throw new common_1.BadRequestException(`Document ${document.originalFileName} exceeds the ${create_loan_document_dto_1.MAX_LOAN_DOCUMENT_SIZE_BYTES} byte limit.`);
-            }
-            if (document.storageKey?.includes('..')) {
-                throw new common_1.BadRequestException('Document storageKey must not contain path traversal segments.');
-            }
-        }
-    }
     ensureMemberAccess(currentUser) {
         if (currentUser.role !== enums_1.UserRole.MEMBER &&
             currentUser.role !== enums_1.UserRole.SHAREHOLDER_MEMBER) {
@@ -194,6 +275,7 @@ let LoansService = class LoansService {
             status: loan.status,
             currentLevel: loan.currentLevel,
             assignedToStaffId: loan.assignedToStaffId?.toString(),
+            deficiencyReasons: loan.deficiencyReasons ?? [],
             createdAt: loan.createdAt,
             updatedAt: loan.updatedAt,
         };
@@ -205,14 +287,13 @@ exports.LoansService = LoansService = __decorate([
     __param(0, (0, mongoose_1.InjectModel)(loan_schema_1.Loan.name)),
     __param(1, (0, mongoose_1.InjectModel)(loan_document_schema_1.LoanDocumentMetadata.name)),
     __param(2, (0, mongoose_1.InjectModel)(loan_workflow_history_schema_1.LoanWorkflowHistory.name)),
-    __param(3, (0, mongoose_1.InjectModel)(notification_schema_1.Notification.name)),
-    __param(4, (0, mongoose_1.InjectModel)(member_schema_1.Member.name)),
+    __param(3, (0, mongoose_1.InjectModel)(member_schema_1.Member.name)),
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
-        mongoose_2.Model,
         audit_service_1.AuditService,
+        notifications_service_1.NotificationsService,
         storage_service_1.StorageService])
 ], LoansService);
 //# sourceMappingURL=loans.service.js.map

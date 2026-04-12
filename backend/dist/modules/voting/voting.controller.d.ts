@@ -21,7 +21,11 @@ export declare class VotingController {
         optionId: string;
         otpVerifiedAt: Date;
     }>;
-    getVoteResults(voteId: string): Promise<import("./interfaces").VoteResultsBreakdown[]>;
+    getVoteResults(currentUser: AuthenticatedUser, voteId: string): Promise<import("./interfaces").VoteResultsBreakdown[]>;
+    createVoteAlias(currentUser: AuthenticatedUser, dto: CreateVoteDto): Promise<import("./interfaces").VoteSummaryResult>;
+    openVoteAlias(currentUser: AuthenticatedUser, voteId: string): Promise<import("./interfaces").VoteSummaryResult>;
+    closeVoteAlias(currentUser: AuthenticatedUser, voteId: string): Promise<import("./interfaces").VoteSummaryResult>;
+    getParticipationAlias(currentUser: AuthenticatedUser, voteId: string): Promise<import("./interfaces").VoteParticipationResult>;
     listVotesForAdmin(currentUser: AuthenticatedUser): Promise<import("./interfaces").VoteAdminListItem[]>;
     createVote(currentUser: AuthenticatedUser, dto: CreateVoteDto): Promise<import("./interfaces").VoteSummaryResult>;
     addVoteOption(currentUser: AuthenticatedUser, voteId: string, dto: CreateVoteOptionDto): Promise<import("./interfaces").VoteOptionResult>;

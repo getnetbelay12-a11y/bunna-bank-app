@@ -17,6 +17,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./create-notification.dto"), exports);
 __exportStar(require("./create-notification-campaign.dto"), exports);
 __exportStar(require("./create-notification-template.dto"), exports);
+__exportStar(require("./create-telegram-link-code.dto"), exports);
 __exportStar(require("./list-notifications-query.dto"), exports);
+__exportStar(require("./register-device-token.dto"), exports);
+__exportStar(require("./update-telegram-preferences.dto"), exports);
 __exportStar(require("./update-notification-template.dto"), exports);
 //# sourceMappingURL=index.js.map

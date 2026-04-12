@@ -11,6 +11,8 @@ export declare class SchoolPayment {
     amount: number;
     channel: 'mobile' | 'branch';
     status: 'successful' | 'failed';
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 export declare const SchoolPaymentSchema: import("mongoose").Schema<SchoolPayment, import("mongoose").Model<SchoolPayment, any, any, any, import("mongoose").Document<unknown, any, SchoolPayment, any, {}> & SchoolPayment & {
     _id: Types.ObjectId;

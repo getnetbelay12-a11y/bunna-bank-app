@@ -13,7 +13,7 @@ const storage_service_1 = require("../../common/storage/storage.service");
 const audit_module_1 = require("../audit/audit.module");
 const loan_workflow_history_schema_1 = require("../loan-workflow/schemas/loan-workflow-history.schema");
 const member_schema_1 = require("../members/schemas/member.schema");
-const notification_schema_1 = require("../notifications/schemas/notification.schema");
+const notifications_module_1 = require("../notifications/notifications.module");
 const loan_document_schema_1 = require("./schemas/loan-document.schema");
 const loan_schema_1 = require("./schemas/loan.schema");
 const loans_controller_1 = require("./loans.controller");
@@ -25,11 +25,11 @@ exports.LoansModule = LoansModule = __decorate([
     (0, common_1.Module)({
         imports: [
             audit_module_1.AuditModule,
+            notifications_module_1.NotificationsModule,
             mongoose_1.MongooseModule.forFeature([
                 { name: loan_schema_1.Loan.name, schema: loan_schema_1.LoanSchema },
                 { name: loan_document_schema_1.LoanDocumentMetadata.name, schema: loan_document_schema_1.LoanDocumentMetadataSchema },
                 { name: loan_workflow_history_schema_1.LoanWorkflowHistory.name, schema: loan_workflow_history_schema_1.LoanWorkflowHistorySchema },
-                { name: notification_schema_1.Notification.name, schema: notification_schema_1.NotificationSchema },
                 { name: member_schema_1.Member.name, schema: member_schema_1.MemberSchema },
             ]),
         ],

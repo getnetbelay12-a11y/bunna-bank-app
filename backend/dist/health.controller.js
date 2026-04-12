@@ -25,8 +25,8 @@ let HealthController = class HealthController {
     getRoot() {
         return {
             status: 'ok',
-            service: 'CBE backend',
-            message: 'CBE backend is running.',
+            service: 'Bunna backend',
+            message: 'Bunna backend is running.',
             port: this.configService.get('app.port') ?? 4000,
             health: '/health',
         };
@@ -34,12 +34,12 @@ let HealthController = class HealthController {
     getHealth() {
         return {
             status: 'ok',
-            service: 'CBE backend',
+            service: 'Bunna backend',
             port: this.configService.get('app.port') ?? 4000,
             database: this.connection.readyState === 1 ? 'connected' : 'disconnected',
             databaseName: this.connection.db?.databaseName ||
                 this.configService.get('database.databaseName') ||
-                'cbe_bank_app',
+                'bunna_bank_app',
         };
     }
 };

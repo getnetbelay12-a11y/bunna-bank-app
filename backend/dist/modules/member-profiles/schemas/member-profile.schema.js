@@ -40,6 +40,22 @@ __decorate([
     __metadata("design:type", String)
 ], MemberProfileEntity.prototype, "identityVerificationStatus", void 0);
 __decorate([
+    (0, mongoose_1.Prop)({ default: 'submitted', index: true }),
+    __metadata("design:type", String)
+], MemberProfileEntity.prototype, "onboardingReviewStatus", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", String)
+], MemberProfileEntity.prototype, "onboardingReviewNote", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", String)
+], MemberProfileEntity.prototype, "onboardingReviewedBy", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", Date)
+], MemberProfileEntity.prototype, "onboardingLastReviewedAt", void 0);
+__decorate([
     (0, mongoose_1.Prop)({ default: true }),
     __metadata("design:type", Boolean)
 ], MemberProfileEntity.prototype, "consentAccepted", void 0);
@@ -52,4 +68,6 @@ exports.MemberProfileEntity = MemberProfileEntity = __decorate([
 ], MemberProfileEntity);
 exports.MemberProfileSchema = mongoose_1.SchemaFactory.createForClass(MemberProfileEntity);
 exports.MemberProfileSchema.index({ branchId: 1, membershipStatus: 1 });
+exports.MemberProfileSchema.index({ branchId: 1, onboardingReviewStatus: 1 });
+exports.MemberProfileSchema.index({ districtId: 1, onboardingReviewStatus: 1 });
 //# sourceMappingURL=member-profile.schema.js.map

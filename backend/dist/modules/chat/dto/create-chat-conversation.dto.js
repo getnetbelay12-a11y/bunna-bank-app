@@ -30,6 +30,12 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], CreateChatConversationDto.prototype, "loanId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.MaxLength)(1500),
     __metadata("design:type", String)
 ], CreateChatConversationDto.prototype, "initialMessage", void 0);

@@ -12,6 +12,8 @@ export interface ChatMessageResult {
 export interface ChatConversationResult {
     id: string;
     conversationId: string;
+    loanId?: string;
+    routingLevel?: 'general' | 'branch' | 'district' | 'head_office';
     memberId: string;
     customerId: string;
     memberName?: string;
@@ -30,6 +32,8 @@ export interface ChatConversationResult {
     issueCategory: string;
     priority: 'low' | 'normal' | 'high';
     escalationFlag: boolean;
+    responseDueAt?: Date;
+    slaState?: 'on_track' | 'attention' | 'breached';
     lastMessageAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;

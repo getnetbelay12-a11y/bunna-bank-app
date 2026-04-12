@@ -38,6 +38,21 @@ let DashboardController = class DashboardController {
     getVotingSummary(currentUser) {
         return this.dashboardService.getVotingSummary(currentUser);
     }
+    getOnboardingReviewQueue(currentUser) {
+        return this.dashboardService.getOnboardingReviewQueue(currentUser);
+    }
+    getOnboardingEvidenceDetail(currentUser, memberId) {
+        return this.dashboardService.getOnboardingEvidenceDetail(currentUser, memberId);
+    }
+    getAutopayOperations(currentUser) {
+        return this.dashboardService.getAutopayOperations(currentUser);
+    }
+    updateAutopayOperation(currentUser, id, dto) {
+        return this.dashboardService.updateAutopayOperation(currentUser, id, dto);
+    }
+    updateOnboardingReview(currentUser, memberId, dto) {
+        return this.dashboardService.updateOnboardingReview(currentUser, memberId, dto);
+    }
 };
 exports.DashboardController = DashboardController;
 __decorate([
@@ -79,6 +94,46 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], DashboardController.prototype, "getVotingSummary", null);
+__decorate([
+    (0, common_1.Get)('onboarding-review'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "getOnboardingReviewQueue", null);
+__decorate([
+    (0, common_1.Get)('onboarding-review/:memberId/evidence'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('memberId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "getOnboardingEvidenceDetail", null);
+__decorate([
+    (0, common_1.Get)('autopay-operations'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "getAutopayOperations", null);
+__decorate([
+    (0, common_1.Patch)('autopay-operations/:id'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, dto_1.UpdateAutopayOperationDto]),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "updateAutopayOperation", null);
+__decorate([
+    (0, common_1.Patch)('onboarding-review/:memberId'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('memberId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, dto_1.UpdateOnboardingReviewDto]),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "updateOnboardingReview", null);
 exports.DashboardController = DashboardController = __decorate([
     (0, common_1.UseGuards)(guards_1.JwtAuthGuard, guards_1.RolesGuard),
     (0, decorators_1.Roles)(enums_1.UserRole.BRANCH_MANAGER, enums_1.UserRole.DISTRICT_OFFICER, enums_1.UserRole.DISTRICT_MANAGER, enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),

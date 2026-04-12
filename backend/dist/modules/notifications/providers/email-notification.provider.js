@@ -5,6 +5,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -12,56 +15,57 @@ var EmailNotificationProvider_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailNotificationProvider = void 0;
 const common_1 = require("@nestjs/common");
-const fs_1 = require("fs");
+const config_1 = require("@nestjs/config");
 const nodemailer_1 = __importDefault(require("nodemailer"));
-const path_1 = __importDefault(require("path"));
 let EmailNotificationProvider = EmailNotificationProvider_1 = class EmailNotificationProvider {
-    constructor() {
+    constructor(configService) {
+        this.configService = configService;
         this.logger = new common_1.Logger(EmailNotificationProvider_1.name);
-        this.logoCid = 'bunna-bank-logo';
-        this.logoPath = path_1.default.resolve(__dirname, '..', '..', '..', '..', '..', 'assets', 'bunna_bank_logo.png');
-        this.provider = process.env.EMAIL_PROVIDER ?? (process.env.MAIL_HOST ? 'smtp' : 'log');
-        this.host = process.env.MAIL_HOST ?? process.env.EMAIL_SMTP_HOST;
-        this.port = Number(process.env.MAIL_PORT ?? process.env.EMAIL_SMTP_PORT ?? 587);
-        this.user = process.env.MAIL_USER ?? process.env.EMAIL_SMTP_USER;
-        this.password = process.env.MAIL_PASSWORD ?? process.env.EMAIL_SMTP_PASS;
-        this.from = process.env.MAIL_FROM ??
-            process.env.EMAIL_SENDER ??
-            'notifications@bunna-bank.local';
-        this.secure = (process.env.MAIL_SECURE ?? process.env.EMAIL_SMTP_SECURE ?? 'false') === 'true';
+        this.transport = null;
     }
     async send(payload) {
-        if (this.provider !== 'smtp') {
+        const config = this.configService.getOrThrow('notifications.email');
+        if (config.provider === 'log') {
+            const messageId = `log-${Date.now()}`;
+            this.logger.log(`Email reminder queued in log mode recipient=${payload.recipient} subject="${payload.subject ?? 'Bunna Bank Notification'}" messageId=${messageId} attachments=${payload.attachments?.length ?? 0}`);
             return {
-                status: 'failed',
+                status: 'sent',
                 recipient: payload.recipient,
-                errorMessage: 'SMTP delivery is not configured. Set MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, and MAIL_FROM.',
+                providerMessageId: messageId,
             };
         }
-        if (!this.host || !this.user || !this.password || !this.from) {
+        if (config.provider !== 'smtp') {
+            this.logger.warn(`Email provider misconfigured for recipient=${payload.recipient}. provider=${config.provider}`);
             return {
                 status: 'failed',
                 recipient: payload.recipient,
-                errorMessage: 'SMTP is not configured. Set MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, and MAIL_FROM.',
+                errorMessage: 'Mail configuration missing. Set EMAIL_PROVIDER=smtp with valid SMTP settings, or use EMAIL_PROVIDER=log in local seeded mode.',
+            };
+        }
+        if (!config.smtpHost || !config.smtpUser || !config.smtpPass || !config.sender) {
+            this.logger.warn(`SMTP settings incomplete for recipient=${payload.recipient}. host=${Boolean(config.smtpHost)} user=${Boolean(config.smtpUser)} sender=${Boolean(config.sender)}`);
+            return {
+                status: 'failed',
+                recipient: payload.recipient,
+                errorMessage: 'Mail configuration missing. Set EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USER, EMAIL_SMTP_PASS, and EMAIL_SENDER.',
             };
         }
         try {
-            const transport = nodemailer_1.default.createTransport({
-                host: this.host,
-                port: this.port,
-                secure: this.secure,
-                auth: {
-                    user: this.user,
-                    pass: this.password,
-                },
-            });
+            const transport = this.getTransport(config);
+            const logoAttachment = payload.attachments?.find((item) => item.cid);
+            this.logger.log(`email delivery strategy=${logoAttachment ? 'cid' : 'inline_html'} recipient=${payload.recipient} cid=${logoAttachment?.cid ?? 'none'}`);
             const info = await transport.sendMail({
-                from: `Bunna Bank <${this.from}>`,
+                from: `Bunna Bank <${config.sender}>`,
                 to: payload.recipient,
                 subject: payload.subject ?? 'Bunna Bank Notification',
                 text: payload.messageBody,
                 html: payload.htmlBody ?? `<p>${this.escapeForHtml(payload.messageBody)}</p>`,
-                attachments: this.buildAttachments(),
+                attachments: payload.attachments?.map((item) => ({
+                    filename: item.filename,
+                    content: item.content,
+                    contentType: item.contentType,
+                    cid: item.cid,
+                })),
             });
             this.logger.log(`Email sent recipient=${payload.recipient} messageId=${info.messageId}`);
             return {
@@ -71,8 +75,8 @@ let EmailNotificationProvider = EmailNotificationProvider_1 = class EmailNotific
             };
         }
         catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown SMTP delivery failure.';
-            this.logger.error(`Email send failed for ${payload.recipient}: ${message}`);
+            const message = this.buildDeliveryErrorMessage(error);
+            this.logger.error(`Email send failed for ${payload.recipient}: ${message}`, error instanceof Error ? error.stack : undefined);
             return {
                 status: 'failed',
                 recipient: payload.recipient,
@@ -80,18 +84,20 @@ let EmailNotificationProvider = EmailNotificationProvider_1 = class EmailNotific
             };
         }
     }
-    buildAttachments() {
-        if (!(0, fs_1.existsSync)(this.logoPath)) {
-            this.logger.warn(`Email logo file not found at ${this.logoPath}`);
-            return [];
+    getTransport(config) {
+        if (this.transport) {
+            return this.transport;
         }
-        return [
-            {
-                filename: 'bunna-bank-logo.png',
-                path: this.logoPath,
-                cid: this.logoCid,
+        this.transport = nodemailer_1.default.createTransport({
+            host: config.smtpHost,
+            port: config.smtpPort,
+            secure: config.smtpSecure,
+            auth: {
+                user: config.smtpUser,
+                pass: config.smtpPass,
             },
-        ];
+        });
+        return this.transport;
     }
     escapeForHtml(value) {
         return value
@@ -101,9 +107,26 @@ let EmailNotificationProvider = EmailNotificationProvider_1 = class EmailNotific
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
+    buildDeliveryErrorMessage(error) {
+        if (!(error instanceof Error)) {
+            return 'Unknown SMTP delivery failure.';
+        }
+        const nodeError = error;
+        if (nodeError.code === 'EAUTH') {
+            return 'SMTP authentication failed.';
+        }
+        if (nodeError.code === 'ECONNECTION' || nodeError.code === 'ETIMEDOUT') {
+            return 'SMTP connection failed.';
+        }
+        if (nodeError.response) {
+            return nodeError.response;
+        }
+        return nodeError.message;
+    }
 };
 exports.EmailNotificationProvider = EmailNotificationProvider;
 exports.EmailNotificationProvider = EmailNotificationProvider = EmailNotificationProvider_1 = __decorate([
-    (0, common_1.Injectable)()
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [config_1.ConfigService])
 ], EmailNotificationProvider);
 //# sourceMappingURL=email-notification.provider.js.map

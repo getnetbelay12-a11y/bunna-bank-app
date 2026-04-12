@@ -5,9 +5,9 @@ export declare class NotificationDeliveryService {
     private readonly emailProvider;
     private readonly smsProvider;
     private readonly telegramProvider;
-    private readonly inAppProvider;
+    private readonly mobilePushProvider;
     private readonly notificationsService;
-    constructor(emailProvider: ChannelNotificationProvider, smsProvider: ChannelNotificationProvider, telegramProvider: ChannelNotificationProvider, inAppProvider: ChannelNotificationProvider, notificationsService: NotificationsService);
+    constructor(emailProvider: ChannelNotificationProvider, smsProvider: ChannelNotificationProvider, telegramProvider: ChannelNotificationProvider, mobilePushProvider: ChannelNotificationProvider, notificationsService: NotificationsService);
     deliver(payload: ChannelNotificationPayload & {
         userRole?: UserRole;
         createInAppRecord?: boolean;

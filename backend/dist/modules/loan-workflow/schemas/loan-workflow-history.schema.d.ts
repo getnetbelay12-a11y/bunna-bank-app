@@ -10,6 +10,8 @@ export declare class LoanWorkflowHistory {
     actorId?: Types.ObjectId;
     actorRole?: UserRole;
     comment?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 export declare const LoanWorkflowHistorySchema: import("mongoose").Schema<LoanWorkflowHistory, import("mongoose").Model<LoanWorkflowHistory, any, any, any, import("mongoose").Document<unknown, any, LoanWorkflowHistory, any, {}> & LoanWorkflowHistory & {
     _id: Types.ObjectId;

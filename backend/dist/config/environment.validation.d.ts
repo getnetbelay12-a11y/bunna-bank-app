@@ -1,6 +1,5 @@
 type EnvironmentRecord = Record<string, unknown>;
-declare const DEFAULT_MONGODB_URI = "mongodb://localhost:27017/cbe_bank_app";
-export declare function parseAllowedOrigins(value: string): string[];
+declare const DEFAULT_MONGODB_URI = "mongodb://localhost:27017/bunna_bank_app";
 export declare function normalizeMongoUri(uri: string): string;
 export declare function parseMongoConnectionDetails(uri: string): {
     databaseName: string;

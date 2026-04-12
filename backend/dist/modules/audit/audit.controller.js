@@ -26,6 +26,18 @@ let AuditController = class AuditController {
     list(query) {
         return this.auditService.list(query);
     }
+    listOnboardingReviewDecisions(query) {
+        return this.auditService.listOnboardingReviewDecisions(query);
+    }
+    async exportOnboardingReviewDecisions(query, response) {
+        const csv = await this.auditService.exportOnboardingReviewDecisionsCsv(query);
+        response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        response.setHeader('Content-Disposition', 'attachment; filename="onboarding-review-decisions.csv"');
+        return csv;
+    }
+    verifyAuditLog(auditId) {
+        return this.auditService.verifyAuditLog(auditId);
+    }
     listByEntity(entityType, entityId) {
         return this.auditService.listByEntity(entityType, entityId);
     }
@@ -41,6 +53,28 @@ __decorate([
     __metadata("design:paramtypes", [dto_1.ListAuditLogsQueryDto]),
     __metadata("design:returntype", void 0)
 ], AuditController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)('onboarding-review-decisions'),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dto_1.ListOnboardingReviewAuditQueryDto]),
+    __metadata("design:returntype", void 0)
+], AuditController.prototype, "listOnboardingReviewDecisions", null);
+__decorate([
+    (0, common_1.Get)('onboarding-review-decisions/export'),
+    __param(0, (0, common_1.Query)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dto_1.ListOnboardingReviewAuditQueryDto, Object]),
+    __metadata("design:returntype", Promise)
+], AuditController.prototype, "exportOnboardingReviewDecisions", null);
+__decorate([
+    (0, common_1.Get)(':auditId/verify'),
+    __param(0, (0, common_1.Param)('auditId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AuditController.prototype, "verifyAuditLog", null);
 __decorate([
     (0, common_1.Get)('entity/:entityType/:entityId'),
     __param(0, (0, common_1.Param)('entityType')),

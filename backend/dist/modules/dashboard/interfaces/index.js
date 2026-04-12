@@ -16,4 +16,5 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./dashboard.interface"), exports);
 __exportStar(require("./manager-performance.interface"), exports);
+__exportStar(require("./command-center.interface"), exports);
 //# sourceMappingURL=index.js.map

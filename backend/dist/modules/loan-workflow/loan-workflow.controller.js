@@ -23,11 +23,43 @@ let LoanWorkflowController = class LoanWorkflowController {
     constructor(loanWorkflowService) {
         this.loanWorkflowService = loanWorkflowService;
     }
+    getLoanQueue(currentUser) {
+        return this.loanWorkflowService.getLoanQueue(currentUser);
+    }
+    getLoanQueueDetail(currentUser, loanId) {
+        return this.loanWorkflowService.getLoanQueueDetail(currentUser, loanId);
+    }
+    getLoanCustomerProfile(currentUser, loanId) {
+        return this.loanWorkflowService.getLoanCustomerProfile(currentUser, loanId);
+    }
     processAction(currentUser, loanId, dto) {
         return this.loanWorkflowService.processAction(currentUser, loanId, dto);
     }
 };
 exports.LoanWorkflowController = LoanWorkflowController;
+__decorate([
+    (0, common_1.Get)('queue'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], LoanWorkflowController.prototype, "getLoanQueue", null);
+__decorate([
+    (0, common_1.Get)('queue/:loanId'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('loanId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], LoanWorkflowController.prototype, "getLoanQueueDetail", null);
+__decorate([
+    (0, common_1.Get)('queue/:loanId/customer-profile'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('loanId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], LoanWorkflowController.prototype, "getLoanCustomerProfile", null);
 __decorate([
     (0, common_1.Patch)(':loanId/action'),
     __param(0, (0, decorators_1.CurrentUser)()),

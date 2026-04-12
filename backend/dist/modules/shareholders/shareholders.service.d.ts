@@ -13,4 +13,5 @@ export declare class ShareholdersService {
     private buildEligibility;
     private ensureShareholderPrincipal;
     private ensureStaffAccess;
+    private toShareholderProfile;
 }

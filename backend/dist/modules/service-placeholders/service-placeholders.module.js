@@ -9,6 +9,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ServicePlaceholdersModule = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
+const audit_module_1 = require("../audit/audit.module");
+const member_schema_1 = require("../members/schemas/member.schema");
+const notifications_module_1 = require("../notifications/notifications.module");
 const service_placeholders_controller_1 = require("./service-placeholders.controller");
 const account_member_request_schema_1 = require("./schemas/account-member-request.schema");
 const atm_card_request_schema_1 = require("./schemas/atm-card-request.schema");
@@ -23,7 +26,10 @@ exports.ServicePlaceholdersModule = ServicePlaceholdersModule;
 exports.ServicePlaceholdersModule = ServicePlaceholdersModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            audit_module_1.AuditModule,
+            notifications_module_1.NotificationsModule,
             mongoose_1.MongooseModule.forFeature([
+                { name: member_schema_1.Member.name, schema: member_schema_1.MemberSchema },
                 { name: autopay_setting_schema_1.AutopaySetting.name, schema: autopay_setting_schema_1.AutopaySettingSchema },
                 { name: member_security_setting_schema_1.MemberSecuritySetting.name, schema: member_security_setting_schema_1.MemberSecuritySettingSchema },
                 { name: atm_card_request_schema_1.AtmCardRequest.name, schema: atm_card_request_schema_1.AtmCardRequestSchema },

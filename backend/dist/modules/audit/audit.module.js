@@ -11,6 +11,8 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const audit_controller_1 = require("./audit.controller");
 const audit_service_1 = require("./audit.service");
+const member_schema_1 = require("../members/schemas/member.schema");
+const staff_schema_1 = require("../staff/schemas/staff.schema");
 const audit_log_schema_1 = require("./schemas/audit-log.schema");
 let AuditModule = class AuditModule {
 };
@@ -18,7 +20,11 @@ exports.AuditModule = AuditModule;
 exports.AuditModule = AuditModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            mongoose_1.MongooseModule.forFeature([{ name: audit_log_schema_1.AuditLog.name, schema: audit_log_schema_1.AuditLogSchema }]),
+            mongoose_1.MongooseModule.forFeature([
+                { name: audit_log_schema_1.AuditLog.name, schema: audit_log_schema_1.AuditLogSchema },
+                { name: staff_schema_1.Staff.name, schema: staff_schema_1.StaffSchema },
+                { name: member_schema_1.Member.name, schema: member_schema_1.MemberSchema },
+            ]),
         ],
         controllers: [audit_controller_1.AuditController],
         providers: [audit_service_1.AuditService],

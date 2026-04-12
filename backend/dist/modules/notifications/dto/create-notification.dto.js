@@ -34,6 +34,11 @@ __decorate([
 ], CreateNotificationDto.prototype, "type", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(enums_1.NotificationChannel),
+    __metadata("design:type", String)
+], CreateNotificationDto.prototype, "channel", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(enums_1.NotificationStatus),
     __metadata("design:type", String)
 ], CreateNotificationDto.prototype, "status", void 0);
@@ -57,4 +62,27 @@ __decorate([
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], CreateNotificationDto.prototype, "entityId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(80),
+    __metadata("design:type", String)
+], CreateNotificationDto.prototype, "actionLabel", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(20),
+    __metadata("design:type", String)
+], CreateNotificationDto.prototype, "priority", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(200),
+    __metadata("design:type", String)
+], CreateNotificationDto.prototype, "deepLink", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], CreateNotificationDto.prototype, "dataPayload", void 0);
 //# sourceMappingURL=create-notification.dto.js.map

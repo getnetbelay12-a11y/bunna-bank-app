@@ -25,4 +25,12 @@ __decorate([
     (0, class_validator_1.MaxLength)(500),
     __metadata("design:type", String)
 ], ProcessLoanActionDto.prototype, "comment", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(5),
+    (0, class_validator_1.IsString)({ each: true }),
+    (0, class_validator_1.MaxLength)(140, { each: true }),
+    __metadata("design:type", Array)
+], ProcessLoanActionDto.prototype, "deficiencyReasons", void 0);
 //# sourceMappingURL=process-loan-action.dto.js.map

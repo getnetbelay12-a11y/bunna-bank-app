@@ -5,6 +5,7 @@ var UserRole;
 (function (UserRole) {
     UserRole["MEMBER"] = "member";
     UserRole["SHAREHOLDER_MEMBER"] = "shareholder_member";
+    UserRole["SCHOOL_ADMIN"] = "school_admin";
     UserRole["SUPPORT_AGENT"] = "support_agent";
     UserRole["LOAN_OFFICER"] = "loan_officer";
     UserRole["BRANCH_MANAGER"] = "branch_manager";

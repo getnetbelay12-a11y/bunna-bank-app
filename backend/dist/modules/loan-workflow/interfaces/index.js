@@ -15,4 +15,5 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./loan-transition-result.interface"), exports);
+__exportStar(require("./loan-queue-item.interface"), exports);
 //# sourceMappingURL=index.js.map

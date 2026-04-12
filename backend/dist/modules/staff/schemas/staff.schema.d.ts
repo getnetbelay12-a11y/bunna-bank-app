@@ -10,6 +10,7 @@ export declare class Staff {
     role: UserRole;
     branchId?: Types.ObjectId;
     districtId?: Types.ObjectId;
+    permissions: string[];
     passwordHash: string;
     isActive: boolean;
 }

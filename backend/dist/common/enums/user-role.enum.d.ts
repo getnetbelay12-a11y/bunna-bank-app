@@ -1,6 +1,7 @@
 export declare enum UserRole {
     MEMBER = "member",
     SHAREHOLDER_MEMBER = "shareholder_member",
+    SCHOOL_ADMIN = "school_admin",
     SUPPORT_AGENT = "support_agent",
     LOAN_OFFICER = "loan_officer",
     BRANCH_MANAGER = "branch_manager",

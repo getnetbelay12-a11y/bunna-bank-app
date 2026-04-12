@@ -14,6 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./create-qr-payment.dto"), exports);
 __exportStar(require("./create-school-payment.dto"), exports);
 __exportStar(require("./school-payment-summary-query.dto"), exports);
 //# sourceMappingURL=index.js.map

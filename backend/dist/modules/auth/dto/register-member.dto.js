@@ -10,7 +10,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RegisterMemberDto = void 0;
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
+const fayda_extraction_dto_1 = require("./fayda-extraction.dto");
 class RegisterMemberDto {
 }
 exports.RegisterMemberDto = RegisterMemberDto;
@@ -32,6 +34,12 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(32),
+    __metadata("design:type", String)
+], RegisterMemberDto.prototype, "phone", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEmail)(),
     (0, class_validator_1.MaxLength)(120),
     __metadata("design:type", String)
 ], RegisterMemberDto.prototype, "email", void 0);
@@ -105,4 +113,10 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], RegisterMemberDto.prototype, "consentAccepted", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => fayda_extraction_dto_1.FaydaExtractionDto),
+    __metadata("design:type", fayda_extraction_dto_1.FaydaExtractionDto)
+], RegisterMemberDto.prototype, "extractedFaydaData", void 0);
 //# sourceMappingURL=register-member.dto.js.map

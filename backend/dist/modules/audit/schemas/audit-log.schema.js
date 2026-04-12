@@ -44,10 +44,37 @@ __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Schema.Types.Mixed }),
     __metadata("design:type", Object)
 ], AuditLog.prototype, "after", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: true, trim: true, index: true }),
+    __metadata("design:type", String)
+], AuditLog.prototype, "auditDigest", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Number }),
+    __metadata("design:type", Number)
+], AuditLog.prototype, "decisionVersion", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Boolean, index: true }),
+    __metadata("design:type", Boolean)
+], AuditLog.prototype, "isCurrentDecision", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, index: true }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], AuditLog.prototype, "supersedesAuditId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, index: true }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], AuditLog.prototype, "supersededByAuditId", void 0);
 exports.AuditLog = AuditLog = __decorate([
     (0, mongoose_1.Schema)({ collection: 'audit_logs', timestamps: true, versionKey: false })
 ], AuditLog);
 exports.AuditLogSchema = mongoose_1.SchemaFactory.createForClass(AuditLog);
 exports.AuditLogSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 exports.AuditLogSchema.index({ actorId: 1, createdAt: -1 });
+exports.AuditLogSchema.index({
+    actionType: 1,
+    entityType: 1,
+    entityId: 1,
+    isCurrentDecision: 1,
+    createdAt: -1,
+});
 //# sourceMappingURL=audit-log.schema.js.map

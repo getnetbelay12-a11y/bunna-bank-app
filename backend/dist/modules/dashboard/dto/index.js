@@ -15,4 +15,6 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./dashboard-period-query.dto"), exports);
+__exportStar(require("./update-autopay-operation.dto"), exports);
+__exportStar(require("./update-onboarding-review.dto"), exports);
 //# sourceMappingURL=index.js.map

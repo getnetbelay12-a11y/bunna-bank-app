@@ -29,6 +29,18 @@ __decorate([
     __metadata("design:type", String)
 ], Member.prototype, "memberType", void 0);
 __decorate([
+    (0, mongoose_1.Prop)({ default: false, index: true }),
+    __metadata("design:type", Boolean)
+], Member.prototype, "isShareholder", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 0, min: 0 }),
+    __metadata("design:type", Number)
+], Member.prototype, "shares", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true, unique: true, sparse: true }),
+    __metadata("design:type", String)
+], Member.prototype, "shareholderId", void 0);
+__decorate([
     (0, mongoose_1.Prop)({
         required: true,
         enum: [enums_1.UserRole.MEMBER, enums_1.UserRole.SHAREHOLDER_MEMBER],
@@ -56,6 +68,46 @@ __decorate([
     (0, mongoose_1.Prop)({ trim: true }),
     __metadata("design:type", String)
 ], Member.prototype, "email", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Member.prototype, "telegramChatId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Member.prototype, "telegramUserId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Member.prototype, "telegramUsername", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Member.prototype, "telegramFirstName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], Member.prototype, "telegramLastName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: false, index: true }),
+    __metadata("design:type", Boolean)
+], Member.prototype, "telegramSubscribed", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", Date)
+], Member.prototype, "telegramLinkedAt", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", Date)
+], Member.prototype, "telegramLastMessageAt", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: true }),
+    __metadata("design:type", Boolean)
+], Member.prototype, "optInLoanReminders", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: true }),
+    __metadata("design:type", Boolean)
+], Member.prototype, "optInInsuranceReminders", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ trim: true, index: true }),
     __metadata("design:type", String)

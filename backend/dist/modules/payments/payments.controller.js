@@ -26,8 +26,23 @@ let PaymentsController = class PaymentsController {
     createSchoolPayment(currentUser, dto) {
         return this.paymentsService.createSchoolPayment(currentUser, dto);
     }
+    createQrPayment(currentUser, dto) {
+        return this.paymentsService.createQrPayment(currentUser, dto);
+    }
     getMySchoolPayments(currentUser) {
         return this.paymentsService.getMySchoolPayments(currentUser);
+    }
+    getMyPaymentReceipts(currentUser) {
+        return this.paymentsService.getMyPaymentReceipts(currentUser);
+    }
+    getMyPaymentActivity(currentUser) {
+        return this.paymentsService.getMyPaymentActivity(currentUser);
+    }
+    getManagerPaymentReceipts(currentUser, memberId) {
+        return this.paymentsService.getManagerPaymentReceipts(currentUser, memberId);
+    }
+    getManagerPaymentActivity(currentUser) {
+        return this.paymentsService.getManagerPaymentActivity(currentUser);
     }
     getSchoolPaymentSummary(currentUser, query) {
         return this.paymentsService.getSchoolPaymentSummary(currentUser, query);
@@ -43,12 +58,51 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], PaymentsController.prototype, "createSchoolPayment", null);
 __decorate([
+    (0, common_1.Post)('qr/scan-pay'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, dto_1.CreateQrPaymentDto]),
+    __metadata("design:returntype", void 0)
+], PaymentsController.prototype, "createQrPayment", null);
+__decorate([
     (0, common_1.Get)('school/my'),
     __param(0, (0, decorators_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], PaymentsController.prototype, "getMySchoolPayments", null);
+__decorate([
+    (0, common_1.Get)('receipts/my'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], PaymentsController.prototype, "getMyPaymentReceipts", null);
+__decorate([
+    (0, common_1.Get)('activity/my'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], PaymentsController.prototype, "getMyPaymentActivity", null);
+__decorate([
+    (0, decorators_1.Roles)(enums_1.UserRole.LOAN_OFFICER, enums_1.UserRole.BRANCH_MANAGER, enums_1.UserRole.DISTRICT_OFFICER, enums_1.UserRole.DISTRICT_MANAGER, enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
+    (0, common_1.Get)('receipts/member/:memberId'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('memberId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], PaymentsController.prototype, "getManagerPaymentReceipts", null);
+__decorate([
+    (0, decorators_1.Roles)(enums_1.UserRole.LOAN_OFFICER, enums_1.UserRole.BRANCH_MANAGER, enums_1.UserRole.DISTRICT_OFFICER, enums_1.UserRole.DISTRICT_MANAGER, enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
+    (0, common_1.Get)('activity'),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], PaymentsController.prototype, "getManagerPaymentActivity", null);
 __decorate([
     (0, decorators_1.Roles)(enums_1.UserRole.LOAN_OFFICER, enums_1.UserRole.BRANCH_MANAGER, enums_1.UserRole.DISTRICT_OFFICER, enums_1.UserRole.DISTRICT_MANAGER, enums_1.UserRole.HEAD_OFFICE_OFFICER, enums_1.UserRole.HEAD_OFFICE_MANAGER, enums_1.UserRole.ADMIN),
     (0, common_1.Get)('school/summary'),

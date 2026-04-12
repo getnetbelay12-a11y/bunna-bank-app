@@ -2,6 +2,9 @@ import { MemberType, UserRole } from '../../../common/enums';
 export interface AuthenticatedUser {
     sub: string;
     role: UserRole;
+    customerId?: string;
+    identifier?: string;
+    email?: string;
     memberType?: MemberType;
     fullName?: string;
     phone?: string;
@@ -11,4 +14,7 @@ export interface AuthenticatedUser {
     branchName?: string;
     districtId?: string;
     districtName?: string;
+    schoolId?: string;
+    schoolName?: string;
+    permissions?: string[];
 }

@@ -34,19 +34,8 @@ let LoansController = class LoansController {
     getLoanDetail(currentUser, loanId) {
         return this.loansService.getLoanDetail(currentUser, loanId);
     }
-    getLoanTimeline(loanId) {
-        return {
-            loanId,
-            timeline: [
-                { status: 'submitted', title: 'Submitted' },
-                { status: 'branch_review', title: 'Branch Review' },
-                { status: 'district_review', title: 'District Review' },
-                { status: 'head_office_review', title: 'Head Office Review' },
-                { status: 'approved', title: 'Approved' },
-                { status: 'rejected', title: 'Rejected' },
-                { status: 'disbursed', title: 'Disbursed' },
-            ],
-        };
+    getLoanTimeline(currentUser, loanId) {
+        return this.loansService.getLoanTimeline(currentUser, loanId);
     }
 };
 exports.LoansController = LoansController;
@@ -84,9 +73,10 @@ __decorate([
 ], LoansController.prototype, "getLoanDetail", null);
 __decorate([
     (0, common_1.Get)(':loanId/timeline'),
-    __param(0, (0, common_1.Param)('loanId')),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('loanId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], LoansController.prototype, "getLoanTimeline", null);
 exports.LoansController = LoansController = __decorate([

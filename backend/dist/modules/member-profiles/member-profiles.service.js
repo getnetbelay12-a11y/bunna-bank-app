@@ -30,6 +30,7 @@ let MemberProfilesService = class MemberProfilesService {
             consentAccepted: dto.consentAccepted,
             membershipStatus: dto.membershipStatus ?? 'pending_verification',
             identityVerificationStatus: dto.identityVerificationStatus ?? 'not_started',
+            onboardingReviewStatus: dto.onboardingReviewStatus ?? 'submitted',
         });
     }
     async findByMemberId(memberId) {

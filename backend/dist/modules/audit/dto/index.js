@@ -16,4 +16,5 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./create-audit-log.dto"), exports);
 __exportStar(require("./list-audit-logs-query.dto"), exports);
+__exportStar(require("./list-onboarding-review-audit-query.dto"), exports);
 //# sourceMappingURL=index.js.map

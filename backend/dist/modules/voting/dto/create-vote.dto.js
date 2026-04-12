@@ -9,8 +9,28 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreateVoteDto = void 0;
+exports.CreateVoteDto = exports.CreateVoteOptionInputDto = void 0;
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
+class CreateVoteOptionInputDto {
+}
+exports.CreateVoteOptionInputDto = CreateVoteOptionInputDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(150),
+    __metadata("design:type", String)
+], CreateVoteOptionInputDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(500),
+    __metadata("design:type", String)
+], CreateVoteOptionInputDto.prototype, "description", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    __metadata("design:type", Number)
+], CreateVoteOptionInputDto.prototype, "displayOrder", void 0);
 class CreateVoteDto {
 }
 exports.CreateVoteDto = CreateVoteDto;
@@ -37,4 +57,11 @@ __decorate([
     (0, class_validator_1.IsDateString)(),
     __metadata("design:type", String)
 ], CreateVoteDto.prototype, "endDate", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMinSize)(2),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => CreateVoteOptionInputDto),
+    __metadata("design:type", Array)
+], CreateVoteDto.prototype, "options", void 0);
 //# sourceMappingURL=create-vote.dto.js.map

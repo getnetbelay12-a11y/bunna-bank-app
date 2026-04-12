@@ -27,30 +27,164 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
         this.logger = new common_1.Logger(NotificationsService_1.name);
     }
     async createNotification(dto) {
-        let delivered = false;
+        let dispatchResult;
         try {
-            delivered = await this.notificationProvider.dispatch({
+            dispatchResult = await this.notificationProvider.dispatch({
                 userType: dto.userType,
                 userId: dto.userId,
                 type: dto.type,
                 title: dto.title,
                 message: dto.message,
+                priority: dto.priority,
+                actionLabel: dto.actionLabel,
+                deepLink: dto.deepLink,
+                dataPayload: dto.dataPayload,
+                preferredChannel: dto.channel,
             });
         }
         catch (error) {
             this.logger.warn(`Notification dispatch failed for ${dto.userType}:${dto.userId}.`, error instanceof Error ? error.stack : undefined);
         }
+        return this.storeNotificationRecord({
+            ...dto,
+            channel: dto.channel ??
+                dispatchResult?.channel ??
+                enums_1.NotificationChannel.MOBILE_PUSH,
+            status: dto.status ?? dispatchResult?.status ?? enums_1.NotificationStatus.FAILED,
+            deliveredAt: dispatchResult?.deliveredAt,
+        });
+    }
+    async notifyStaffSecurityBreachDigest(input) {
+        const cutoff = new Date(Date.now() - NotificationsService_1.SECURITY_BREACH_DIGEST_WINDOW_MS);
+        const existing = await this.notificationModel
+            .findOne({
+            userType: 'staff',
+            userId: new mongoose_2.Types.ObjectId(input.userId),
+            type: enums_1.NotificationType.SYSTEM,
+            title: 'Security review SLA breached',
+            priority: 'high',
+            status: { $ne: enums_1.NotificationStatus.READ },
+            createdAt: { $gte: cutoff },
+        })
+            .sort({ createdAt: -1 });
+        if (!existing) {
+            return this.createNotification({
+                userType: 'staff',
+                userId: input.userId,
+                userRole: input.userRole,
+                type: enums_1.NotificationType.SYSTEM,
+                title: 'Security review SLA breached',
+                message: '1 security review SLA breach requires head office attention.',
+                entityType: 'service_request',
+                entityId: input.serviceRequestId,
+                actionLabel: 'Open security review',
+                priority: 'high',
+                deepLink: '/console/head-office?section=serviceRequests',
+                dataPayload: {
+                    securityBreachDigestCount: 1,
+                    serviceRequestIds: [input.serviceRequestId],
+                    latestServiceRequestId: input.serviceRequestId,
+                    escalationState: 'breached_head_office_attention_required',
+                },
+            });
+        }
+        const currentIds = Array.isArray(existing.dataPayload?.serviceRequestIds)
+            ? existing.dataPayload?.serviceRequestIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
+            : [];
+        const nextIds = Array.from(new Set([...currentIds, input.serviceRequestId]));
+        const nextCount = typeof existing.dataPayload?.securityBreachDigestCount === 'number'
+            ? Math.max(existing.dataPayload.securityBreachDigestCount, nextIds.length)
+            : nextIds.length;
+        existing.message = `${nextCount} security review SLA breaches require head office attention.`;
+        existing.entityType = 'service_request';
+        existing.entityId = new mongoose_2.Types.ObjectId(input.serviceRequestId);
+        existing.actionLabel = 'Open security review';
+        existing.priority = 'high';
+        existing.deepLink = '/console/head-office?section=serviceRequests';
+        existing.dataPayload = {
+            ...(existing.dataPayload ?? {}),
+            securityBreachDigestCount: nextCount,
+            serviceRequestIds: nextIds,
+            latestServiceRequestId: input.serviceRequestId,
+            escalationState: 'breached_head_office_attention_required',
+        };
+        await existing.save();
+        return this.toResult(existing);
+    }
+    async notifyStaffSecurityInvestigationStalledDigest(input) {
+        const cutoff = new Date(Date.now() - NotificationsService_1.SECURITY_STALL_DIGEST_WINDOW_MS);
+        const existing = await this.notificationModel
+            .findOne({
+            userType: 'staff',
+            userId: new mongoose_2.Types.ObjectId(input.userId),
+            type: enums_1.NotificationType.SYSTEM,
+            title: 'Security investigation stalled',
+            priority: 'high',
+            status: { $ne: enums_1.NotificationStatus.READ },
+            createdAt: { $gte: cutoff },
+        })
+            .sort({ createdAt: -1 });
+        if (!existing) {
+            return this.createNotification({
+                userType: 'staff',
+                userId: input.userId,
+                userRole: input.userRole,
+                type: enums_1.NotificationType.SYSTEM,
+                title: 'Security investigation stalled',
+                message: '1 acknowledged security review still has no active investigation.',
+                entityType: 'service_request',
+                entityId: input.serviceRequestId,
+                actionLabel: 'Open stalled review',
+                priority: 'high',
+                deepLink: '/console/head-office?section=serviceRequests',
+                dataPayload: {
+                    securityInvestigationStallCount: 1,
+                    serviceRequestIds: [input.serviceRequestId],
+                    latestServiceRequestId: input.serviceRequestId,
+                    escalationState: 'acknowledged_but_investigation_not_started',
+                },
+            });
+        }
+        const currentIds = Array.isArray(existing.dataPayload?.serviceRequestIds)
+            ? existing.dataPayload?.serviceRequestIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
+            : [];
+        const nextIds = Array.from(new Set([...currentIds, input.serviceRequestId]));
+        const nextCount = typeof existing.dataPayload?.securityInvestigationStallCount === 'number'
+            ? Math.max(existing.dataPayload.securityInvestigationStallCount, nextIds.length)
+            : nextIds.length;
+        existing.message = `${nextCount} acknowledged security reviews still have no active investigation.`;
+        existing.entityType = 'service_request';
+        existing.entityId = new mongoose_2.Types.ObjectId(input.serviceRequestId);
+        existing.actionLabel = 'Open stalled review';
+        existing.priority = 'high';
+        existing.deepLink = '/console/head-office?section=serviceRequests';
+        existing.dataPayload = {
+            ...(existing.dataPayload ?? {}),
+            securityInvestigationStallCount: nextCount,
+            serviceRequestIds: nextIds,
+            latestServiceRequestId: input.serviceRequestId,
+            escalationState: 'acknowledged_but_investigation_not_started',
+        };
+        await existing.save();
+        return this.toResult(existing);
+    }
+    async storeNotificationRecord(dto) {
         const notification = await this.notificationModel.create({
             userType: dto.userType,
             userId: new mongoose_2.Types.ObjectId(dto.userId),
             userRole: dto.userRole,
             type: dto.type,
-            status: dto.status ??
-                (delivered ? enums_1.NotificationStatus.SENT : enums_1.NotificationStatus.FAILED),
+            channel: dto.channel ?? enums_1.NotificationChannel.MOBILE_PUSH,
+            status: dto.status ?? enums_1.NotificationStatus.PENDING,
             title: dto.title,
             message: dto.message,
             entityType: dto.entityType,
             entityId: dto.entityId ? new mongoose_2.Types.ObjectId(dto.entityId) : undefined,
+            actionLabel: dto.actionLabel,
+            priority: dto.priority,
+            deepLink: dto.deepLink,
+            dataPayload: dto.dataPayload,
+            deliveredAt: dto.deliveredAt,
         });
         return this.toResult(notification);
     }
@@ -113,18 +247,27 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
             userId: notification.userId.toString(),
             userRole: notification.userRole,
             type: notification.type,
+            channel: (notification.channel ??
+                enums_1.NotificationChannel.MOBILE_PUSH),
             status: notification.status,
             title: notification.title,
             message: notification.message,
             entityType: notification.entityType,
             entityId: notification.entityId?.toString(),
+            actionLabel: notification.actionLabel,
+            priority: notification.priority,
+            deepLink: notification.deepLink,
+            dataPayload: notification.dataPayload,
             readAt: notification.readAt,
+            deliveredAt: notification.deliveredAt,
             createdAt: notification.createdAt,
             updatedAt: notification.updatedAt,
         };
     }
 };
 exports.NotificationsService = NotificationsService;
+NotificationsService.SECURITY_BREACH_DIGEST_WINDOW_MS = 15 * 60 * 1000;
+NotificationsService.SECURITY_STALL_DIGEST_WINDOW_MS = 15 * 60 * 1000;
 exports.NotificationsService = NotificationsService = NotificationsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, mongoose_1.InjectModel)(notification_schema_1.Notification.name)),

@@ -16,33 +16,34 @@ exports.MongooseStaffAuthRepository = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
+const enums_1 = require("../../../common/enums");
 const staff_schema_1 = require("../../staff/schemas/staff.schema");
+const staff_permissions_1 = require("../../staff/staff-permissions");
+const DEMO_SCHOOL_IDENTIFIER = 'admin@bluenileacademy.school';
 let MongooseStaffAuthRepository = class MongooseStaffAuthRepository {
     constructor(staffModel) {
         this.staffModel = staffModel;
     }
     async findByIdentifier(identifier) {
         const normalizedIdentifier = identifier.trim().toLowerCase();
-        const aliasTargets = this.resolveDemoAliases(normalizedIdentifier);
-        if (aliasTargets.length > 0) {
-            const aliasedStaff = await this.findFirstMatchingStaff(aliasTargets);
-            if (aliasedStaff) {
-                return aliasedStaff;
-            }
+        if (normalizedIdentifier === DEMO_SCHOOL_IDENTIFIER) {
+            return {
+                id: 'school_admin_blue_nile',
+                role: enums_1.UserRole.SCHOOL_ADMIN,
+                passwordHash: 'demo-pass',
+                identifier: DEMO_SCHOOL_IDENTIFIER,
+                email: DEMO_SCHOOL_IDENTIFIER,
+                fullName: 'Meron Fenta',
+                staffNumber: 'SCH-0001',
+                phone: '0911223344',
+                schoolId: 'school_blue_nile',
+                schoolName: 'Blue Nile Academy',
+                branchName: 'Bahir Dar Branch',
+                permissions: (0, staff_permissions_1.deriveStaffPermissions)(enums_1.UserRole.SCHOOL_ADMIN),
+            };
         }
-        const lookupValues = Array.from(new Set([identifier.trim(), normalizedIdentifier]));
-        return this.findFirstMatchingStaff(lookupValues, identifier.trim());
-    }
-    async findFirstMatchingStaff(lookupValues, staffNumber) {
         const staff = await this.staffModel
-            .findOne({
-            isActive: true,
-            $or: [
-                { identifier: { $in: lookupValues } },
-                { email: { $in: lookupValues } },
-                ...(staffNumber ? [{ staffNumber }] : []),
-            ],
-        })
+            .findOne({ identifier, isActive: true })
             .populate({ path: 'branchId', select: 'name' })
             .populate({ path: 'districtId', select: 'name' })
             .lean();
@@ -74,24 +75,16 @@ let MongooseStaffAuthRepository = class MongooseStaffAuthRepository {
             fullName: staff.fullName,
             staffNumber: staff.staffNumber,
             phone: staff.phone,
+            schoolId: undefined,
+            schoolName: undefined,
             branchId: branch.id,
             districtId: district.id,
             branchName: branch.name,
             districtName: district.name,
+            permissions: staff.permissions?.length != null && staff.permissions.length > 0
+                ? staff.permissions
+                : (0, staff_permissions_1.deriveStaffPermissions)(staff.role),
         };
-    }
-    resolveDemoAliases(identifier) {
-        const headOfficeAliases = new Set([
-            'admin',
-            'head_office',
-            'head-office',
-            'head office',
-            'headoffice',
-        ]);
-        if (!headOfficeAliases.has(identifier)) {
-            return [];
-        }
-        return ['admin@bunna.local'];
     }
 };
 exports.MongooseStaffAuthRepository = MongooseStaffAuthRepository;

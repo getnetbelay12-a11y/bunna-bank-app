@@ -13,6 +13,8 @@ export declare class Transaction {
     currency: string;
     externalReference?: string;
     narration?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 export declare const TransactionSchema: import("mongoose").Schema<Transaction, import("mongoose").Model<Transaction, any, any, any, import("mongoose").Document<unknown, any, Transaction, any, {}> & Transaction & {
     _id: Types.ObjectId;
