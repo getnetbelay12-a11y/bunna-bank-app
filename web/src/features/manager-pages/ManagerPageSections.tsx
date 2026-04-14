@@ -73,6 +73,14 @@ function resolveSupersessionReasonCode(
   return 'approval_recorded';
 }
 
+function isLocalRuntime() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+}
+
 export function MembersPage({ session }: SessionProps) {
   const { dashboardApi } = useAppClient();
   const [branches, setBranches] = useState<PerformanceSummaryItem[]>([]);
@@ -208,6 +216,16 @@ export function KycVerificationPage({
         ]
       : items;
 
+  const applyQueueUpdate = (updated: OnboardingReviewItem) => {
+    setItems((current) => {
+      if (updated.onboardingReviewStatus === 'approved') {
+        return current.filter((item) => item.memberId !== updated.memberId);
+      }
+
+      return current.map((item) => (item.memberId === updated.memberId ? updated : item));
+    });
+  };
+
   const handleReviewAction = async (
     memberId: string,
     status: 'review_in_progress' | 'needs_action' | 'approved',
@@ -239,6 +257,12 @@ export function KycVerificationPage({
           : 'Staff moved this onboarding package into active review.';
 
     if (status === 'approved' && evidence != null && blockingMismatchFields.length > 0) {
+      const defaultApprovalReasonCode =
+        evidence.reviewPolicy.blockingMismatchApprovalReasonCodes.includes(
+          'manual_document_review',
+        )
+          ? 'manual_document_review'
+          : evidence.reviewPolicy.blockingMismatchApprovalReasonCodes[0] ?? '';
       setApprovalModal({
         memberId,
         note,
@@ -246,9 +270,9 @@ export function KycVerificationPage({
         supersessionFields: [...APPROVAL_SUPERSESSION_FIELDS],
         evidence,
         canApproveBlockingMismatch,
-        approvalReasonCode: '',
+        approvalReasonCode: defaultApprovalReasonCode,
         approvalJustification: '',
-        stepUpPassword: '',
+        stepUpPassword: isLocalRuntime() ? 'demo-pass' : '',
         mismatchAcknowledgements: Object.fromEntries(
           blockingMismatchFields.map((field) => [field, false]),
         ),
@@ -266,9 +290,7 @@ export function KycVerificationPage({
       acknowledgedSupersessionFields: ['status', 'note'],
     });
 
-    setItems((current) =>
-      current.map((item) => (item.memberId === memberId ? updated : item)),
-    );
+    applyQueueUpdate(updated);
   };
 
   const handleOpenEvidence = async (memberId: string) => {
@@ -279,7 +301,6 @@ export function KycVerificationPage({
       return;
     }
 
-    const fetchProtectedDocumentBlob = dashboardApi.getProtectedDocumentBlob;
     const detail = await dashboardApi.getOnboardingEvidenceDetail(memberId);
 
     const documentEntries = Object.entries(detail.documents).filter((entry): entry is [
@@ -289,7 +310,7 @@ export function KycVerificationPage({
 
     const previewPairs = await Promise.all(
       documentEntries.map(async ([key, document]) => {
-        const blob = await fetchProtectedDocumentBlob(document.storageKey);
+        const blob = await dashboardApi.getProtectedDocumentBlob!(document.storageKey);
         return [key, URL.createObjectURL(blob)] as const;
       }),
     );
@@ -416,17 +437,21 @@ export function KycVerificationPage({
           ? undefined
           : (
               await authApi.verifyStaffStepUp({
-                password: approvalModal.stepUpPassword,
+                password: approvalModal.stepUpPassword.trim(),
                 memberId: approvalModal.memberId,
               })
             ).stepUpToken;
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message.trim()
+          : 'Step-up verification failed. Re-enter your password and try again.';
       setApprovalModal((current) =>
         current == null
           ? null
           : {
               ...current,
-              error: 'Step-up verification failed. Re-enter your password and try again.',
+              error: message,
             },
       );
       return;
@@ -447,9 +472,7 @@ export function KycVerificationPage({
       ),
     });
 
-    setItems((current) =>
-      current.map((item) => (item.memberId === approvalModal.memberId ? updated : item)),
-    );
+    applyQueueUpdate(updated);
     setApprovalModal(null);
   };
 
@@ -745,17 +768,20 @@ export function KycVerificationPage({
               placeItems: 'center',
               padding: 24,
               zIndex: 50,
+              overflowY: 'auto',
             }}
           >
             <div
               style={{
                 width: 'min(720px, 100%)',
+                maxHeight: 'calc(100vh - 48px)',
                 background: '#fff',
                 borderRadius: 20,
                 padding: 24,
                 boxShadow: '0 24px 60px rgba(15, 23, 42, 0.22)',
                 display: 'grid',
                 gap: 16,
+                overflowY: 'auto',
               }}
             >
               <div style={{ display: 'grid', gap: 6 }}>
@@ -817,7 +843,77 @@ export function KycVerificationPage({
                   }
                   placeholder="Re-enter your staff password"
                   autoComplete="current-password"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
+                {isLocalRuntime() ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span className="muted" style={{ fontSize: '0.82rem' }}>
+                      Local seeded staff accounts use <strong>demo-pass</strong>.
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        setApprovalModal((current) =>
+                          current == null
+                            ? null
+                            : {
+                                ...current,
+                                stepUpPassword: 'demo-pass',
+                                error: undefined,
+                              },
+                        )
+                      }
+                    >
+                      Use demo-pass
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        setApprovalModal((current) =>
+                          current == null
+                            ? null
+                            : {
+                                ...current,
+                                approvalReasonCode:
+                                  current.approvalReasonCode ||
+                                  (current.evidence.reviewPolicy.blockingMismatchApprovalReasonCodes.includes(
+                                    'manual_document_review',
+                                  )
+                                    ? 'manual_document_review'
+                                    : current.evidence.reviewPolicy
+                                        .blockingMismatchApprovalReasonCodes[0] ?? ''),
+                                approvalJustification:
+                                  current.approvalJustification.trim().length > 0
+                                    ? current.approvalJustification
+                                    : 'Reviewed Fayda front, Fayda back, and selfie. Name, FIN, and phone match the submitted profile. Approval is based on manual document review despite the DOB mismatch on the Fayda evidence.',
+                                stepUpPassword: 'demo-pass',
+                                mismatchAcknowledgements: Object.fromEntries(
+                                  current.blockingMismatchFields.map((field) => [field, true]),
+                                ),
+                                supersessionAcknowledgements: Object.fromEntries(
+                                  current.supersessionFields.map((field) => [field, true]),
+                                ),
+                                error: undefined,
+                              },
+                        )
+                      }
+                    >
+                      Use local approval defaults
+                    </button>
+                  </div>
+                ) : null}
               </label>
               <label style={{ display: 'grid', gap: 6 }}>
                 <span>Approval justification</span>

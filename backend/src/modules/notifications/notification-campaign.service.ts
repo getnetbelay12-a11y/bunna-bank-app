@@ -574,12 +574,7 @@ export class NotificationCampaignService {
   }
 
   private normalizeChannels(channels: NotificationChannel[]) {
-    const normalized = [
-      NotificationChannel.MOBILE_PUSH,
-      ...channels.filter((item) => item !== NotificationChannel.MOBILE_PUSH),
-    ];
-
-    return Array.from(new Set(normalized));
+    return Array.from(new Set(channels));
   }
 
   private shouldStoreSpecificMobileRecord(

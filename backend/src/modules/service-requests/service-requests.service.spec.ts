@@ -392,6 +392,43 @@ describe('ServiceRequestsService', () => {
     }
   });
 
+  it('avoids Mongo path conflicts when upserting current-day security review snapshots', async () => {
+    const requestId = new Types.ObjectId();
+    serviceRequestModel.find.mockReturnValue({
+      lean: jest.fn().mockResolvedValue([
+        {
+          _id: requestId,
+          type: 'security_review',
+          status: ServiceRequestStatus.SUBMITTED,
+          payload: {
+            dueAt: '2026-03-13T18:00:00.000Z',
+          },
+        },
+      ]),
+    });
+    serviceRequestEventModel.find.mockReturnValue({
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    securityReviewDailySnapshotModel.findOneAndUpdate.mockResolvedValue({});
+
+    const realNow = Date.now;
+    Date.now = jest.fn(() => new Date('2026-03-13T10:00:00.000Z').getTime());
+    try {
+      await service.materializeRecentSecurityReviewSnapshots(1);
+
+      const updateDocument =
+        securityReviewDailySnapshotModel.findOneAndUpdate.mock.calls[0][1];
+      expect(updateDocument.$set.openCount).toBe(1);
+      expect(updateDocument.$setOnInsert.openCount).toBeUndefined();
+      expect(updateDocument.$setOnInsert.breachedCount).toBeUndefined();
+      expect(updateDocument.$setOnInsert.dueSoonCount).toBeUndefined();
+      expect(updateDocument.$setOnInsert.stalledCount).toBeUndefined();
+      expect(updateDocument.$setOnInsert.takeoverCount).toBeUndefined();
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
   it('audits unsupported security review metrics contract detections', async () => {
     await service.reportSecurityReviewMetricsContractIssue(
       {

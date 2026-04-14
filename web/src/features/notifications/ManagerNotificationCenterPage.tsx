@@ -75,6 +75,7 @@ export function ManagerNotificationCenterPage({
   const [formSuccess, setFormSuccess] = useState('');
   const [latestSummary, setLatestSummary] = useState<NotificationCampaignItem['deliverySummary'] | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +104,7 @@ export function ManagerNotificationCenterPage({
         setMessageBody(initialTemplate.messageBody);
         setSelectedChannels(initialTemplate.channelDefaults);
       }
+      setIsBootstrapping(false);
     });
 
     return () => {
@@ -383,7 +385,11 @@ export function ManagerNotificationCenterPage({
               <div className="form-grid">
                 <label className="field-stack">
                   <span>Category</span>
-                  <select value={category} onChange={(event) => setCategory(event.target.value as NotificationCategory)}>
+                  <select
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value as NotificationCategory)}
+                    disabled={isBootstrapping}
+                  >
                     <option value="loan">Loan</option>
                     <option value="insurance">Insurance</option>
                     <option value="payment">Payment</option>
@@ -411,6 +417,7 @@ export function ManagerNotificationCenterPage({
                         setSelectedChannels(selected.channelDefaults);
                       }
                     }}
+                    disabled={isBootstrapping}
                   >
                     {filteredTemplates.map((item) => (
                       <option key={item.id} value={item.templateType}>
@@ -432,6 +439,7 @@ export function ManagerNotificationCenterPage({
                           | 'filtered_customers',
                       )
                     }
+                    disabled={isBootstrapping}
                   >
                     <option value="single_customer">Single customer</option>
                     <option value="selected_customers">Selected customers</option>
@@ -445,6 +453,7 @@ export function ManagerNotificationCenterPage({
                     placeholder="BUN-100001, BUN-100003"
                     value={targetIds}
                     onChange={(event) => setTargetIds(event.target.value)}
+                    disabled={isBootstrapping}
                   />
                 </label>
               </div>
@@ -472,6 +481,7 @@ export function ManagerNotificationCenterPage({
                       )
                     }
                     type="button"
+                    disabled={isBootstrapping}
                   >
                     {formatLabel(channel)}
                   </button>
@@ -499,7 +509,11 @@ export function ManagerNotificationCenterPage({
             <div className="form-grid">
               <label className="field-stack field-span">
                 <span>Subject</span>
-                <input value={subject} onChange={(event) => setSubject(event.target.value)} />
+                <input
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  disabled={isBootstrapping}
+                />
               </label>
 
               <label className="field-stack field-span">
@@ -508,6 +522,7 @@ export function ManagerNotificationCenterPage({
                   rows={5}
                   value={messageBody}
                   onChange={(event) => setMessageBody(event.target.value)}
+                  disabled={isBootstrapping}
                 />
               </label>
             </div>
@@ -525,6 +540,7 @@ export function ManagerNotificationCenterPage({
                 type="button"
                 className={category === 'loan' ? 'channel-chip active' : 'channel-chip'}
                 onClick={() => setCategory('loan')}
+                disabled={isBootstrapping}
               >
                 Loan Preview
               </button>
@@ -532,6 +548,7 @@ export function ManagerNotificationCenterPage({
                 type="button"
                 className={category === 'insurance' ? 'channel-chip active' : 'channel-chip'}
                 onClick={() => setCategory('insurance')}
+                disabled={isBootstrapping}
               >
                 Insurance Preview
               </button>
@@ -559,9 +576,9 @@ export function ManagerNotificationCenterPage({
             <button
               onClick={() => void handleSend()}
               type="button"
-              disabled={isSending}
+              disabled={isSending || isBootstrapping}
             >
-              {isSending ? 'Sending Reminder...' : 'Send Reminder'}
+              {isBootstrapping ? 'Preparing Reminder...' : isSending ? 'Sending Reminder...' : 'Send Reminder'}
             </button>
           </div>
         </DashboardSectionCard>

@@ -217,6 +217,41 @@ describe('NotificationCampaignService', () => {
     );
   });
 
+  it('preserves explicit email-only channels when creating a campaign', async () => {
+    const memberId = new Types.ObjectId();
+    memberModel.find.mockResolvedValue([
+      {
+        _id: memberId,
+        customerId: 'BUN-100001',
+        memberNumber: 'BUN-100001',
+        phone: '0911000001',
+        branchId: new Types.ObjectId('65f1a8d744f0d7b7f95dd001'),
+        districtId: new Types.ObjectId(),
+      },
+    ]);
+    campaignModel.create.mockResolvedValue({ _id: new Types.ObjectId() });
+
+    await service.createCampaign(
+      {
+        sub: new Types.ObjectId().toString(),
+        role: UserRole.HEAD_OFFICE_MANAGER,
+      },
+      {
+        category: NotificationCategory.LOAN,
+        templateType: 'loan_due_soon' as never,
+        channels: [NotificationChannel.EMAIL],
+        targetType: 'selected_customers',
+        targetIds: ['BUN-100001'],
+      },
+    );
+
+    expect(campaignModel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channels: [NotificationChannel.EMAIL],
+      }),
+    );
+  });
+
   it('blocks campaign creation when branch manager targets outside branch scope', async () => {
     memberModel.find.mockResolvedValue([]);
 

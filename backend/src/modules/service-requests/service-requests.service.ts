@@ -1092,6 +1092,15 @@ export class ServiceRequestsService {
       dayStarts.map((periodStart) => {
         const periodEnd = this.shiftDays(periodStart, 1);
         const isCurrentDay = periodStart.getTime() === windowEnd.getTime();
+        const currentDayCounts = isCurrentDay
+          ? {
+              openCount: input.openCount,
+              breachedCount: input.breachedCount,
+              dueSoonCount: input.dueSoonCount,
+              stalledCount: input.stalledCount,
+              takeoverCount: input.takeoverCount,
+            }
+          : {};
 
         return this.securityReviewDailySnapshotModel.findOneAndUpdate(
           { periodStart },
@@ -1110,22 +1119,18 @@ export class ServiceRequestsService {
                 periodStart,
                 periodEnd,
               ),
-              ...(isCurrentDay
-                ? {
-                    openCount: input.openCount,
-                    breachedCount: input.breachedCount,
-                    dueSoonCount: input.dueSoonCount,
-                    stalledCount: input.stalledCount,
-                    takeoverCount: input.takeoverCount,
-                  }
-                : {}),
+              ...currentDayCounts,
             },
             $setOnInsert: {
-              openCount: 0,
-              breachedCount: 0,
-              dueSoonCount: 0,
-              stalledCount: 0,
-              takeoverCount: 0,
+              ...(isCurrentDay
+                ? {}
+                : {
+                    openCount: 0,
+                    breachedCount: 0,
+                    dueSoonCount: 0,
+                    stalledCount: 0,
+                    takeoverCount: 0,
+                  }),
             },
           },
           { upsert: true, new: true },
